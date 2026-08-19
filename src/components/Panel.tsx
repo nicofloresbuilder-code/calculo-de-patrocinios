@@ -5,7 +5,7 @@ export function Panel({
   children,
   className = "",
 }: {
-  title: string;
+  title?: string;
   children: ReactNode;
   className?: string;
 }) {
@@ -13,9 +13,11 @@ export function Panel({
     <section
       className={`rounded-lg border border-aforo-panel-border bg-aforo-panel p-6 ${className}`}
     >
-      <h2 className="mb-4 text-xs font-semibold uppercase tracking-widest text-aforo-fg-muted">
-        {title}
-      </h2>
+      {title && (
+        <h2 className="mb-4 text-xs font-semibold uppercase tracking-widest text-aforo-fg-muted">
+          {title}
+        </h2>
+      )}
       {children}
     </section>
   );
