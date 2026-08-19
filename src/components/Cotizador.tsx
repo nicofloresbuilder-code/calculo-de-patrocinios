@@ -5,14 +5,50 @@ import { Panel } from "./Panel";
 import { EventoForm } from "./EventoForm";
 import { RangoBar } from "./RangoBar";
 import { DesglosePanel } from "./DesglosePanel";
+import { RacionalPanel, type RacionalState } from "./RacionalPanel";
 import { computePrice, type ComputePriceResult } from "@/lib/pricing";
 import type { EventoInput } from "@/lib/types";
 
 export function Cotizador() {
   const [resultado, setResultado] = useState<ComputePriceResult | null>(null);
+  const [racional, setRacional] = useState<RacionalState>({ status: "idle" });
 
-  function handleSubmit(evento: EventoInput) {
-    setResultado(computePrice(evento));
+  async function handleSubmit(evento: EventoInput) {
+    const precio = computePrice(evento);
+    setResultado(precio);
+    setRacional({ status: "loading" });
+
+    try {
+      const res = await fetch("/api/narrativa", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          evento,
+          precio: { min: precio.min, objetivo: precio.objetivo, max: precio.max },
+        }),
+      });
+
+      if (!res.ok) {
+        const body = await res.json().catch(() => null);
+        setRacional({
+          status: "error",
+          error: body?.error ?? "No se pudo generar la narrativa.",
+        });
+        return;
+      }
+
+      const data = (await res.json()) as {
+        narrativa: string;
+        comparables_relevantes_ids: string[];
+      };
+      setRacional({
+        status: "done",
+        narrativa: data.narrativa,
+        comparablesIds: data.comparables_relevantes_ids,
+      });
+    } catch {
+      setRacional({ status: "error", error: "No se pudo generar la narrativa." });
+    }
   }
 
   return (
@@ -54,11 +90,7 @@ export function Cotizador() {
           </Panel>
 
           <Panel title="Por qué este rango">
-            <p className="text-sm text-aforo-fg-muted">
-              Narrativa generada por IA explicando el racional, más los
-              comparables históricos más cercanos.{" "}
-              <span className="text-aforo-fg-muted/70">(Commit 5)</span>
-            </p>
+            <RacionalPanel state={racional} />
           </Panel>
         </div>
       </div>
