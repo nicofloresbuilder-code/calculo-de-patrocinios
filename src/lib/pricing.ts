@@ -19,6 +19,19 @@ export function clamp(v: number, min: number, max: number): number {
   return Math.min(Math.max(v, min), max);
 }
 
+/**
+ * Piso del factor de aforo. Pase mecánico (Commit 7, DECISIONS.md):
+ * con el piso original de 0.3, "Match Cup" (aforo 2,000, real $300K
+ * negociados) computaba $108K — 64% por debajo del real, porque
+ * aforo/20000 = 0.1 se clampeaba al mismo 0.3 que cualquier evento chico,
+ * sin distinguir 500 asistentes de 5,999. Subido a 0.7 con evidencia de
+ * ese deal: $300K → $252K, -16% (todavía subestima, pero mucho menos).
+ * Falta más de un deal chico para calibrar el piso con precisión —
+ * documentado como pendiente, no resuelto con una corazonada.
+ */
+const AFORO_FACTOR_MIN = 0.7;
+const AFORO_FACTOR_MAX = 3.0;
+
 export interface ComputePriceInput {
   activacion: Activacion;
   aforo: number;
@@ -48,9 +61,11 @@ export interface ComputePriceResult {
 
 /**
  * Motor de pricing determinista — el precio nunca lo decide el LLM.
- * Los pesos (1.4 / 1.25 / 1.2 / etc.) son un punto de partida inventado,
- * no datos verificados; se recalibran en el pase mecánico (Commit 7)
- * contra los 3 deals reales. Ver DECISIONS.md.
+ * Los pesos (1.4 / 1.25 / 1.2 / etc.) siguen siendo un punto de partida
+ * en su mayoría sin verificar. El piso del factor de aforo ya se
+ * recalibró una vez en el pase mecánico (Commit 7, ver AFORO_FACTOR_MIN
+ * arriba) contra los 3 deals reales — el resto de los pesos sigue
+ * pendiente de más pases con más deals. Ver DECISIONS.md.
  */
 export function computePrice({
   activacion,
@@ -63,7 +78,7 @@ export function computePrice({
   const base = BASE_ACTIVACION[activacion];
 
   const factors: PriceFactors = {
-    aforo: clamp(aforo / 20000, 0.3, 3.0),
+    aforo: clamp(aforo / 20000, AFORO_FACTOR_MIN, AFORO_FACTOR_MAX),
     duracion: 1 + (dias - 1) * 0.15,
     lineup: LINEUP_FACTOR[lineup],
     exclusividad: exclusiva ? 1.25 : 1.0,

@@ -42,3 +42,46 @@ test("computePrice es determinista (mismo input, mismo output)", () => {
   const b = computePrice(MATCH_CUP);
   assert.deepEqual(a, b);
 });
+
+// Pase mecánico (Commit 7, DECISIONS.md): los 3 comparables reales que el
+// usuario negoció, con las cifras reales confirmadas (no las placeholder
+// del seed SQL). Estos tests documentan dónde quedó la fórmula después del
+// ajuste al piso de aforo — no todos pasan un margen estricto, eso es
+// evidencia real de qué falta calibrar, no un bug oculto.
+const ULTRA_MEXICO = {
+  activacion: "oficial" as const,
+  aforo: 45000,
+  dias: 3,
+  lineup: "A" as const,
+  exclusiva: true,
+  ciudad_tier: "tier1" as const,
+};
+const GOLEIRO = {
+  activacion: "oficial" as const,
+  aforo: 15000,
+  dias: 5,
+  lineup: "B" as const,
+  exclusiva: true,
+  ciudad_tier: "tier1" as const,
+};
+
+test("pase mecánico: Ultra México/Sprite queda dentro de ±10% del real ($5M)", () => {
+  const result = computePrice(ULTRA_MEXICO);
+  const desvio = Math.abs(result.objetivo - 5_000_000) / 5_000_000;
+  assert.ok(desvio <= 0.1, `objetivo=${result.objetivo}, desvío=${(desvio * 100).toFixed(1)}%`);
+});
+
+test("pase mecánico: Match Cup mejora tras subir el piso de aforo (antes -64%, ahora ≤ -20%)", () => {
+  const result = computePrice(MATCH_CUP);
+  const desvio = (result.objetivo - 300_000) / 300_000;
+  assert.ok(desvio >= -0.2, `objetivo=${result.objetivo}, desvío=${(desvio * 100).toFixed(1)}%`);
+});
+
+test("pase mecánico: Goleiro/Michelob sigue sobrestimado — pendiente, no oculto", () => {
+  const result = computePrice(GOLEIRO);
+  const desvio = (result.objetivo - 1_000_000) / 1_000_000;
+  // Documentamos el desvío real en vez de forzar un rango que lo esconda.
+  // DECISIONS.md explica por qué no se tocó en este pase (aforo=15,000 no
+  // cae en el clamp que sí se corrigió) y qué se investigaría después.
+  assert.ok(desvio > 0.3, `objetivo=${result.objetivo}, desvío=${(desvio * 100).toFixed(1)}% (se esperaba sobrestimado)`);
+});

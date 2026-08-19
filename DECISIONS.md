@@ -36,7 +36,7 @@ Bitácora de decisiones de build. Se actualiza al cierre de cada sesión.
 
 **Commit 6 (prep) — Guardar cotización:** `GuardarCotizacion.tsx` inserta con `user_id` explícito (RLS exige `auth.uid() = user_id`); `/cotizaciones` lista las propias vía RLS (sin `.eq` manual). Verificado sin Supabase conectado: el flujo de cálculo sigue intacto y muestra "inicia sesión para guardar" en vez de romperse.
 
-**Deploy 1 — confirmado en producción:** `calculo-de-patrocinios.vercel.app` (usuario conectó el repo vía Vercel dashboard). Probado ahí mismo con los inputs de "Match Cup" (aforo 2,000, 1 día, line-up C, proveedor, tier1): regresa $81,000–$140,400, objetivo $108,000 — muy por **debajo** del ~$300K real. Junto con el hallazgo de Ultra México (Commit 4, muy por **arriba**), esto le da a Commit 7 dos señales opuestas: el clamp de `aforo` (0.3–3.0) castiga demasiado a eventos chicos y la `base` de `oficial` parece sobrestimada para eventos grandes — no es un solo peso mal, son al menos dos ajustes independientes.
+**Deploy 1 — confirmado en producción:** `calculo-de-patrocinios.vercel.app` (usuario conectó el repo vía Vercel dashboard). Probado ahí mismo con los inputs de "Match Cup" (aforo 2,000, 1 día, line-up C, proveedor, tier1): regresa $81,000–$140,400, objetivo $108,000 — muy por debajo de lo negociado. *(Nota: en esta prueba se comparó contra el monto placeholder del seed SQL, $300K — el número real confirmado por el usuario en Commit 7 también es $300K, así que la lectura no cambia; pero el placeholder de Ultra México ($1.2M) sí resultó incorrecto, ver Commit 7 abajo con la cifra real de $5M.)*
 
 **Bloqueo de sesión — Vercel "Blocked" deployments:** después de agregar `ANTHROPIC_API_KEY`, varios redeploys (por push y por dashboard) quedaron en estado "Blocked" indefinidamente — no era un error de build, la cuenta tiene dos proyectos duplicados (`calculo-de-patrocinios` y `calculo-de-patrocinios-braz`, restos de un import anterior bajo team) y el deploy vivo en el dominio corto llevaba 2h sin la key nueva. Se instaló Vercel CLI (`npx vercel`, cache local por el mismo motivo de permisos rotos de npm) y se hizo login por device flow (igual que GitHub: el usuario aprueba en su navegador, el agente no ve credenciales). Con el CLI se encontró una env var mal escrita (`anhtropic_api_key`, de un intento manual previo) — se borró — y se linkeó el proyecto correcto. El deploy vía `vercel --prod` también se quedó en "Building…"/status UNKNOWN varios minutos: esto ya parece una restricción a nivel cuenta de Vercel (posible verificación de pago pendiente en cuenta nueva), no algo resoluble desde el código — pendiente que el usuario revise Account Settings → Billing. El deploy anterior (sin key) sigue sirviendo la URL, así que "Deploy 1: vive en una URL real" no se pierde por esto.
 
@@ -47,7 +47,47 @@ Bitácora de decisiones de build. Se actualiza al cierre de cada sesión.
 
 **Bug real encontrado y arreglado — Commit 5:** con comparables ya en la base, la narrativa empezó a fallar con `SyntaxError: Unexpected token '\`'`. Causa: Claude envuelve el JSON de respuesta en un code fence markdown (```json ... ```) a pesar de que el system prompt dice "SOLO en JSON, sin texto fuera del JSON" — el modelo no lo respeta al 100%. Se agregó `extractJson()` en `src/app/api/narrativa/route.ts` que le quita el fence si existe y recorta al primer `{...}` balanceado antes de parsear. Verificado: la narrativa ahora sale con comparables reales, y de hecho el modelo señaló solo (sin que se le pidiera) que el comparable "Ultra México 2026 · Sprite" pagó mucho menos que el rango calculado — la misma discrepancia que ya se había detectado en Commit 4/deploy 1, ahora confirmada desde un ángulo distinto (LLM comparando contra el comparable real, no solo la fórmula contra el número negociado).
 
-**Siguiente paso (mañana / próxima sesión):**
-1. Resolver el bloqueo de Vercel (revisar billing/verificación de cuenta) y redeploy — deploy 2, cierra Commit 5 del todo en producción.
+## Commit 7 — Pase mecánico
+
+**Cifras reales confirmadas por el usuario** (los montos del seed SQL eran placeholder, como advertía su propio comentario):
+
+| Deal | Placeholder (seed) | Real confirmado |
+|---|---|---|
+| Ultra México · Sprite | $1,200,000 | **$5,000,000** |
+| Goleiro FanFest · Michelob Ultra | $650,000 | **$1,000,000** |
+| Match Cup · Frontón Bucareli | $300,000 | $300,000 (sin cambio) |
+
+**Qué falló:** corriendo `computePrice()` tal cual (Commit 4) contra las 3 cifras reales:
+
+| Deal | Real | Computado (antes) | Desvío |
+|---|---|---|---|
+| Ultra México | $5,000,000 | $4,914,000 | -1.7% ✅ |
+| Goleiro | $1,000,000 | $1,656,000 | **+65.6%** ❌ |
+| Match Cup | $300,000 | $108,000 | **-64.0%** ❌ |
+
+Ultra México ya cuadraba casi perfecto. Los otros dos fallaban en direcciones opuestas. Se investigó cada uno por separado en vez de forzar un solo ajuste que "promediara" los dos errores:
+
+- **Match Cup (aforo=2,000):** el factor de aforo es `clamp(aforo/20000, 0.3, 3.0)`. En 2,000 personas eso da `0.1`, clampeado al piso `0.3` — el mismo piso que le tocaría a un evento de 500 o de 5,999 personas, sin distinguir entre ellos. Ese piso demasiado bajo es la causa directa del -64%.
+- **Goleiro (aforo=15,000):** no cae en el clamp (15000/20000=0.75, dentro de rango) — el desvío ahí no viene del piso de aforo, viene de otro lado (posiblemente `duracion` sobre-pesado para eventos de 5 días, o que "oficial" no capture bien un activation de 5 días con múltiples días de exposición). No se tocó en este pase para no adivinar un segundo cambio sin evidencia aislada de cuál variable es la culpable.
+
+**Qué se corrigió:** el piso del factor de aforo, de `0.3` a `0.7`, en `src/lib/pricing.ts` (`AFORO_FACTOR_MIN`). Solo afecta eventos con aforo/20000 < 0.7 (es decir, aforo < 14,000) — no toca Ultra ni Goleiro, que ya estaban fuera del clamp.
+
+**Resultado nuevo vs. real:**
+
+| Deal | Real | Computado (después) | Desvío |
+|---|---|---|---|
+| Ultra México | $5,000,000 | $4,914,000 | -1.7% (sin cambio, no afectado) |
+| Goleiro | $1,000,000 | $1,656,000 | +65.6% (sin cambio — pendiente, ver arriba) |
+| Match Cup | $300,000 | $252,000 | **-16.0%** (antes -64.0%) |
+
+Match Cup mejoró de 64% de error a 16% — no perfecto, pero un fix real y aislado, no una corazonada. Tests nuevos en `src/lib/pricing.test.ts` (7/7 pasan) fijan estos 3 números como regresión, incluyendo uno que documenta explícitamente que Goleiro sigue sobrestimado (para que no se "arregle solo" silenciosamente si alguien más toca la fórmula sin revisar esto).
+
+**Por qué no se tocó Goleiro en el mismo pase:** un solo comparable con sobrestimación (65.6%) no da suficiente señal para saber si el problema está en `duracion`, en la `base` de `oficial`, o en otra interacción — cualquier ajuste ahora sería una corazonada, exactamente lo que este proceso está tratando de evitar. Queda documentado como pendiente para el próximo deal real que se cierre.
+
+**Redeploy:** commiteado y pusheado a `main`; el redeploy a producción está bloqueado por el mismo problema de cuenta de Vercel de la sección anterior (no por este cambio) — se aplicará solo cuando eso se resuelva.
+
+## Siguiente paso (mañana / próxima sesión)
+
+1. Resolver el bloqueo de Vercel (revisar billing/verificación de cuenta) y redeploy — deploy 2, cierra Commit 5 y Commit 7 del todo en producción.
 2. Habilitar Google como provider en Supabase Auth (Authentication → Providers → Google, necesita un OAuth Client ID/Secret de Google Cloud Console) — para poder probar el login real y cerrar Commit 2/6 de punta a punta (guardar cotización + verificar que otro user_id no ve la de este usuario).
-3. Commit 7: pase mecánico completo con los 3 deals reales — ya hay evidencia de que Ultra México sobrestima (~$3.9M vs ~$1.2M real) y Match Cup subestima (~$108K vs ~$300K real); falta decidir y aplicar el ajuste concreto a `computePrice()`, correr el test contra los 3, y documentar el resultado nuevo vs. el real.
+3. Con un deal real más (idealmente otro chico o mediano con `oficial`), investigar el sobrepeso de Goleiro: aislar si es `duracion`, la `base` de `oficial`, o ambos, antes de tocar la fórmula otra vez.
