@@ -6,15 +6,18 @@ import { EventoForm } from "./EventoForm";
 import { RangoBar } from "./RangoBar";
 import { DesglosePanel } from "./DesglosePanel";
 import { RacionalPanel, type RacionalState } from "./RacionalPanel";
+import { GuardarCotizacion } from "./GuardarCotizacion";
 import { computePrice, type ComputePriceResult } from "@/lib/pricing";
 import type { EventoInput } from "@/lib/types";
 
 export function Cotizador() {
+  const [evento, setEvento] = useState<EventoInput | null>(null);
   const [resultado, setResultado] = useState<ComputePriceResult | null>(null);
   const [racional, setRacional] = useState<RacionalState>({ status: "idle" });
 
-  async function handleSubmit(evento: EventoInput) {
-    const precio = computePrice(evento);
+  async function handleSubmit(nuevoEvento: EventoInput) {
+    setEvento(nuevoEvento);
+    const precio = computePrice(nuevoEvento);
     setResultado(precio);
     setRacional({ status: "loading" });
 
@@ -23,7 +26,7 @@ export function Cotizador() {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          evento,
+          evento: nuevoEvento,
           precio: { min: precio.min, objetivo: precio.objetivo, max: precio.max },
         }),
       });
@@ -61,8 +64,15 @@ export function Cotizador() {
       {/* Columna derecha: resultado */}
       <div className="flex flex-col gap-6">
         <Panel>
-          {resultado ? (
-            <RangoBar min={resultado.min} objetivo={resultado.objetivo} max={resultado.max} />
+          {resultado && evento ? (
+            <div className="space-y-4">
+              <RangoBar min={resultado.min} objetivo={resultado.objetivo} max={resultado.max} />
+              <GuardarCotizacion
+                evento={evento}
+                resultado={resultado}
+                narrativa={racional.status === "done" ? (racional.narrativa ?? null) : null}
+              />
+            </div>
           ) : (
             <>
               <p className="mb-4 text-xs font-semibold uppercase tracking-widest text-aforo-fg-muted">

@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { createClient } from "@/lib/supabase/server";
 import { AuthStatus } from "./AuthStatus";
 
@@ -24,7 +25,17 @@ export async function Header() {
           <h1 className="font-serif text-3xl font-bold tracking-tight">AFORO</h1>
           <span className="text-aforo-accent">Cotizador de patrocinios</span>
         </div>
-        <AuthStatus email={email} />
+        <div className="flex items-center gap-4">
+          {email && (
+            <Link
+              href="/cotizaciones"
+              className="text-sm text-aforo-fg-muted hover:text-aforo-fg"
+            >
+              Mis cotizaciones
+            </Link>
+          )}
+          <AuthStatus email={email} />
+        </div>
       </div>
     </header>
   );
