@@ -19,6 +19,20 @@ Responde SOLO en JSON, sin texto fuera del JSON:
 
 No inventes cifras que no te dieron. No cambies el precio — solo explícalo.`;
 
+/**
+ * Claude a veces envuelve el JSON en un bloque de markdown (```json ... ```)
+ * a pesar del "SOLO en JSON" del prompt. Se le quita el fence si está, y si
+ * aun así hay texto alrededor, se recorta al primer {...} balanceado.
+ */
+function extractJson(text: string): string {
+  const fenced = text.match(/```(?:json)?\s*([\s\S]*?)\s*```/);
+  const candidate = fenced ? fenced[1] : text;
+  const start = candidate.indexOf("{");
+  const end = candidate.lastIndexOf("}");
+  if (start === -1 || end === -1 || end < start) return candidate.trim();
+  return candidate.slice(start, end + 1);
+}
+
 interface NarrativaBody {
   evento: EventoInput;
   precio: Pick<ComputePriceResult, "min" | "objetivo" | "max">;
@@ -103,7 +117,7 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "Respuesta vacía del LLM." }, { status: 502 });
     }
 
-    const parsed = JSON.parse(textBlock.text) as {
+    const parsed = JSON.parse(extractJson(textBlock.text)) as {
       narrativa: string;
       comparables_relevantes_ids: string[];
     };
