@@ -1,39 +1,15 @@
 import { Header } from "@/components/Header";
 import { Panel } from "@/components/Panel";
-
-const CAMPOS_EVENTO = [
-  "Nombre del evento",
-  "Aforo (capacidad)",
-  "Duración (días)",
-  "Caliber del line-up",
-  "Exclusividad de categoría",
-  "Tipo de activación",
-  "Ciudad / venue",
-];
+import { EventoForm } from "@/components/EventoForm";
 
 export default function Home() {
   return (
     <div className="flex flex-1 flex-col">
       <Header />
       <main className="mx-auto grid w-full max-w-7xl flex-1 grid-cols-1 gap-6 px-6 py-8 sm:px-10 lg:grid-cols-[340px_1fr]">
-        {/* Columna izquierda: variables del evento (Commit 3 agrega el form real) */}
+        {/* Columna izquierda: variables del evento */}
         <Panel title="Variables del evento" className="h-fit">
-          <ul className="space-y-3">
-            {CAMPOS_EVENTO.map((campo) => (
-              <li
-                key={campo}
-                className="rounded-md border border-dashed border-aforo-panel-border bg-aforo-input px-3 py-2.5 text-sm text-aforo-fg-muted"
-              >
-                {campo}
-              </li>
-            ))}
-          </ul>
-          <button
-            disabled
-            className="mt-5 w-full cursor-not-allowed rounded-md bg-aforo-accent/40 px-4 py-2.5 text-sm font-semibold text-aforo-bg"
-          >
-            Calcular rango sugerido
-          </button>
+          <EventoForm />
         </Panel>
 
         {/* Columna derecha: resultado */}
