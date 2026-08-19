@@ -4,6 +4,8 @@ Bitácora de decisiones de build. Se actualiza al cierre de cada sesión.
 
 ---
 
+*(`ANTHROPIC_API_KEY` agregada en Vercel — este commit solo dispara el redeploy para que la tome.)*
+
 ## Sesión 1 — 2026-08-19
 
 **Qué se decidió:**
