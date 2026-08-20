@@ -86,8 +86,10 @@ Match Cup mejoró de 64% de error a 16% — no perfecto, pero un fix real y aisl
 
 **Redeploy:** commiteado y pusheado a `main`; el redeploy a producción está bloqueado por el mismo problema de cuenta de Vercel de la sección anterior (no por este cambio) — se aplicará solo cuando eso se resuelva.
 
-## Siguiente paso (mañana / próxima sesión)
+**Google OAuth — intentado, no cerrado:** se configuró un OAuth Client en Google Cloud Console con el redirect URI de Supabase (`https://ietahcthuejmgjlmgsub.supabase.co/auth/v1/callback`) y se pegaron Client ID/Secret en Supabase Auth → Providers → Google. Al probar el login real, Google regresa `Error 400: redirect_uri_mismatch` — el `redirect_uri` que Supabase manda coincide exactamente con la URL que se pidió registrar, así que el problema es de configuración del lado de Google Cloud (la URL no quedó guardada en el Client correcto, o hay más de un OAuth Client y las credenciales pegadas en Supabase son de uno distinto al que tiene la URL). Se decidió **no seguir depurando esto por ahora** — queda documentado como pendiente conocido, no oculto. Efecto: el botón "Iniciar sesión con Google" no completa el login todavía, por lo que Guardar cotización / Mis cotizaciones (Commit 6) no se pueden probar de punta a punta con un usuario real — el código y las políticas de RLS ya están verificados por separado (ver arriba, curl directo a la REST API).
+
+## Siguiente paso (si se retoma)
 
 1. Resolver el bloqueo de Vercel (revisar billing/verificación de cuenta) y redeploy — deploy 2, cierra Commit 5 y Commit 7 del todo en producción.
-2. Habilitar Google como provider en Supabase Auth (Authentication → Providers → Google, necesita un OAuth Client ID/Secret de Google Cloud Console) — para poder probar el login real y cerrar Commit 2/6 de punta a punta (guardar cotización + verificar que otro user_id no ve la de este usuario).
+2. Depurar `redirect_uri_mismatch` de Google OAuth: en Google Cloud Console → Credentials, confirmar cuántos OAuth Client IDs existen y cuál tiene el redirect URI realmente guardado (con Save dado); asegurar que ese mismo Client ID/Secret sea el que está pegado en Supabase.
 3. Con un deal real más (idealmente otro chico o mediano con `oficial`), investigar el sobrepeso de Goleiro: aislar si es `duracion`, la `base` de `oficial`, o ambos, antes de tocar la fórmula otra vez.
