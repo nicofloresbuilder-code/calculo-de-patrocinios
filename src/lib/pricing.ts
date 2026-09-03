@@ -3,25 +3,30 @@ import type { Activacion, CiudadTier, Lineup } from "./types";
 /**
  * Bases por tipo de activación.
  *
- * `naming` se recalibró de $2,000,000 a $1,650,000 (2026-08-30) contra el
- * caso B2: 45,000 pers · 3 días · line-up A · CDMX · naming · exclusiva ·
- * 10x10. Con la base vieja daba $20.6M; Nicolás fijó el precio correcto en
- * $17M, y esa base lo reproduce ($17,027,010, +0.2%).
+ * OJO al recalibrar: estas bases están acopladas a DURACION_PREMIO_POR_DIA.
+ * Se ajustaron a la vez que ese premio bajó de 15% a 5% (2026-08-30) —
+ * bajarlo sin re-fitear las bases tira todos los eventos de varios días
+ * entre 8% y 17%, porque las bases traían el 15% horneado adentro.
  *
- * Contexto de cómo se llegó al número, porque importa para el siguiente
- * que lo revise: Nicolás cotizó B2 primero en $6.5M, se le mostró que la
- * fórmula daba $20.6M, y entonces lo subió a $17M. O sea que el número
- * salió DESPUÉS de ver el de la fórmula — no es un precio observado en
- * frío, y menos aún un deal cerrado. Vale menos como evidencia que Ultra
- * México ($5M, deal real cerrado). Se aplica porque él es quien conoce el
- * mercado, pero queda anotado como lo que es.
+ * `oficial` = $875,000 (antes $800,000). Es la base mejor sustentada de
+ * todas: los 4 casos del Grupo A —que varían solo el territorio— la
+ * estiman por separado en $866K, $883K, $876K y $876K. Cuatro
+ * estimaciones independientes dentro del 1% entre sí.
  *
- * Con esta base, naming vale 2.06x lo que oficial. Sigue sin resolverse
- * qué territorio tenían los deals históricos — ver DECISIONS.md.
+ * `naming` = $1,947,000 (antes $2,000,000, luego $1,650,000). Sale de un
+ * SOLO punto (B2 = $17M) y además del ancla más débil que hay: Nicolás
+ * cotizó B2 primero en $6.5M, se le mostró que la fórmula daba $20.6M, y
+ * entonces lo subió a $17M — o sea, el número salió después de ver el de
+ * la fórmula, y no es un deal cerrado. Si algún día hay un naming real
+ * cerrado, ese debe ganarle a este número.
+ *
+ * `proveedor` y `media` siguen sin tocarse: los únicos casos que los usan
+ * (Match Cup, B1) son de 1 día, así que el cambio de duración no los
+ * movió y no hay evidencia nueva para recalibrarlos.
  */
 export const BASE_ACTIVACION: Record<Activacion, number> = {
-  naming: 1_650_000,
-  oficial: 800_000,
+  naming: 1_947_000,
+  oficial: 875_000,
   proveedor: 300_000,
   media: 150_000,
 };
@@ -50,6 +55,26 @@ export function clamp(v: number, min: number, max: number): number {
  */
 const AFORO_FACTOR_MIN = 0.7;
 const AFORO_FACTOR_MAX = 3.0;
+
+/**
+ * Premio por día adicional. Bajado de 0.15 a 0.05 (2026-08-30) por
+ * decisión de Nicolás.
+ *
+ * Contexto: al aislar Goleiro (15,000 asistentes en total repartidos en
+ * 5 días, 10x10) contra el caso A3 (mismos 15,000, mismo 10x10, pero en
+ * 2 días), el precio real se parte a la mitad — $1M contra $2M. Eso
+ * sugería que el driver era la DENSIDAD (gente/día) y que durar más
+ * debería BAJAR el precio.
+ *
+ * Nicolás lo descartó con razón de negocio: durar más sí vale más, porque
+ * al patrocinador le cuesta más operar la activación (staff, logística)
+ * durante más días. Lo que estaba mal era la magnitud — 15% por día es
+ * demasiado; "si acaso un 5%".
+ *
+ * Efecto medido: los eventos de varios días bajan entre 8% y 17%, y
+ * Goleiro sigue sin explicarse (+109%). Ver DECISIONS.md.
+ */
+const DURACION_PREMIO_POR_DIA = 0.05;
 
 /**
  * Factor de territorio — calibrado con precios reales de Nicolás
@@ -160,7 +185,7 @@ export function computePrice({
 
   const factors: PriceFactors = {
     aforo: clamp(aforo / 20000, AFORO_FACTOR_MIN, AFORO_FACTOR_MAX),
-    duracion: 1 + (dias - 1) * 0.15,
+    duracion: 1 + (dias - 1) * DURACION_PREMIO_POR_DIA,
     lineup: LINEUP_FACTOR[lineup],
     exclusividad: exclusiva ? 1.25 : 1.0,
     ciudad: CIUDAD_FACTOR[ciudad_tier],

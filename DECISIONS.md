@@ -266,3 +266,37 @@ Mismo precio con y sin exclusividad. El factor de 1.25 de exclusividad no mueve 
 Si se confirma, el modelo sería `max(PISO, fórmula)` — y explicaría de paso el -16% que quedó pendiente en Match Cup desde el Commit 7.
 
 **Bloqueante antes de recalibrar:** falta confirmar si el "15,000 personas" del Grupo A también es total (como Goleiro) o por día. Si fuera por día, todo este análisis cambia. También sigue sin saberse el territorio de Ultra México — y ahí hay una pista: si Ultra tuvo 5×5, su factor de densidad sale en 2.976, casi idéntico al 2.920 de B2 con la misma densidad (15,000/día). Eso lo haría consistente.
+
+### Premio por duración: de 15% a 5% por día (decisión de Nicolás)
+
+Se le presentó el par controlado A3 vs Goleiro sugiriendo que el driver era la **densidad** y que durar más debería BAJAR el precio. **Lo descartó, con razón de negocio:** durar más sí vale más, porque al patrocinador le cuesta más operar la activación (staff, logística) durante más días. Lo que estaba mal era la magnitud — 15% por día es demasiado, "si acaso un 5%".
+
+Se aplicó `DURACION_PREMIO_POR_DIA = 0.05`.
+
+**Consecuencia mecánica que hubo que resolver:** bajar el premio sin tocar nada más tiró todos los eventos de varios días entre 8% y 17%, incluido el Grupo A (sus propias cotizaciones frescas pasaron de ~0% a −9%). La razón es que las bases se habían calibrado **con el 15% horneado adentro**. No es una corazonada re-fitearlas: es la consecuencia forzada del cambio.
+
+- `oficial`: $800,000 → **$875,000**. Es la base mejor sustentada del modelo: los 4 casos del Grupo A la estiman por separado en $866K, $883K, $876K y $876K — cuatro estimaciones independientes dentro del 1% entre sí.
+- `naming`: $1,650,000 → **$1,947,000**. Sale de un solo punto (B2) y del ancla más débil que hay. Anotado en el código: si aparece un naming real cerrado, ese debe ganarle.
+- `proveedor` y `media`: **sin tocar**. Los únicos casos que los usan (Match Cup, B1) son de 1 día, así que el cambio no los movió y no hay evidencia nueva.
+
+**Estado tras el cambio — 7 de 9 anclas dentro del 10%:**
+
+| Caso | Evidencia | Real | Fórmula | Desvío |
+|---|---|---|---|---|
+| A1 2×2 | cotizado | $400,000 | $404,135 | +1.0% |
+| A2 5×5 | cotizado | $1,200,000 | $1,188,633 | −0.9% |
+| A3 10×10 | cotizado | $2,000,000 | $1,996,903 | −0.2% |
+| A4 15×15 | cotizado | $3,200,000 | $3,197,422 | −0.1% |
+| B1 | cotizado | $300,000 | $315,000 | +5.0% |
+| B2 naming | revisado | $17,000,000 | $17,000,815 | +0.0% |
+| Ultra México | **deal real** | $5,000,000 | $4,547,812 | **−9.0%** |
+| Match Cup | **deal real** | $300,000 | $252,000 | −16.0% |
+| **Goleiro** | **deal real** | $1,000,000 | $2,282,175 | **+128%** |
+
+**Lo que empeoró, dicho sin adornos:** Ultra pasó de −1.7% a −9.0%. Es un deal real cerrado y es el ancla más confiable que hay. El 5% por día podría quedarse corto para eventos largos, o Ultra pudo haber tenido un territorio mayor a 5×5 (sigue sin confirmarse).
+
+**Goleiro empeoró de +65.6% a +128%,** y la causa es que ahora sabemos que tuvo 10×10 — el dato nuevo lo empujó hacia arriba en vez de explicarlo. Con el modelo actual, Goleiro "debería" haberse vendido en ~$2.28M y cerró en $1M. Ya no es un problema de fórmula que se pueda seguir persiguiendo con los datos que hay: **o ese deal se cerró por debajo de su valor, o los eventos tipo FanFest valen menos que un festival del mismo aforo.** Eso solo lo puede contestar Nicolás.
+
+### Piso de precio: identificado, no implementado
+
+Se detectó evidencia de un piso (~$300K): Match Cup **sin** exclusividad y B1 **con** exclusividad cuestan lo mismo, $300,000 — el factor de 1.25 no mueve nada porque ambos están pegados al mínimo. Nicolás confirmó que existe pero que **"podríamos bajar el piso a mucho menos, dependiendo mucho del evento"**, y pidió dejarlo así por ahora. No se implementó. Queda como el pendiente que explicaría el −16% de Match Cup.
