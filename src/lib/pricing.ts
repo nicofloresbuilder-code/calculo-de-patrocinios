@@ -1,7 +1,26 @@
 import type { Activacion, CiudadTier, Lineup } from "./types";
 
+/**
+ * Bases por tipo de activación.
+ *
+ * `naming` se recalibró de $2,000,000 a $1,650,000 (2026-08-30) contra el
+ * caso B2: 45,000 pers · 3 días · line-up A · CDMX · naming · exclusiva ·
+ * 10x10. Con la base vieja daba $20.6M; Nicolás fijó el precio correcto en
+ * $17M, y esa base lo reproduce ($17,027,010, +0.2%).
+ *
+ * Contexto de cómo se llegó al número, porque importa para el siguiente
+ * que lo revise: Nicolás cotizó B2 primero en $6.5M, se le mostró que la
+ * fórmula daba $20.6M, y entonces lo subió a $17M. O sea que el número
+ * salió DESPUÉS de ver el de la fórmula — no es un precio observado en
+ * frío, y menos aún un deal cerrado. Vale menos como evidencia que Ultra
+ * México ($5M, deal real cerrado). Se aplica porque él es quien conoce el
+ * mercado, pero queda anotado como lo que es.
+ *
+ * Con esta base, naming vale 2.06x lo que oficial. Sigue sin resolverse
+ * qué territorio tenían los deals históricos — ver DECISIONS.md.
+ */
 export const BASE_ACTIVACION: Record<Activacion, number> = {
-  naming: 2_000_000,
+  naming: 1_650_000,
   oficial: 800_000,
   proveedor: 300_000,
   media: 150_000,

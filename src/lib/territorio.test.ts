@@ -98,19 +98,15 @@ test("caso B1 (evento chico) queda dentro del 10%", () => {
 
 /**
  * Caso B2: 45,000 pers · 3 días · line-up A · CDMX · NAMING · exclusiva ·
- * 10x10 → Nicolás cotiza $6,500,000, la fórmula da ~$20.6M (+217%).
+ * 10x10 → precio fijado por Nicolás: $17,000,000.
  *
- * Este test DOCUMENTA el desvío en vez de esconderlo. La causa está
- * aislada: en los precios reales, `naming` vale ~1.3x lo que `oficial`
- * (Ultra México oficial = $5M real vs B2 naming = $6.5M), pero la fórmula
- * asume 2.5x ($2M vs $800K de base). No se corrigió todavía porque la
- * base de `naming` se calibraría con solo 2 puntos, y falta saber qué
- * territorio tenían los deals históricos. Ver DECISIONS.md.
- *
- * Si alguien arregla la base de naming, este test truena — a propósito:
- * es la señal de que hay que actualizarlo con el número nuevo.
+ * Este ancla vale MENOS que las demás y hay que saberlo al usarla: Nicolás
+ * cotizó B2 primero en $6.5M, vio que la fórmula daba $20.6M, y entonces
+ * lo subió a $17M. El número salió después de ver el de la fórmula, así
+ * que no es un precio observado en frío ni un deal cerrado — a diferencia
+ * de Ultra México ($5M real). Ver la nota en BASE_ACTIVACION.
  */
-test("PENDIENTE CONOCIDO: naming sobrestima en el caso B2", () => {
+test("caso B2 (naming) reproduce el precio fijado, dentro del 3%", () => {
   const { objetivo } = computePrice({
     activacion: "naming",
     aforo: 45000,
@@ -120,8 +116,31 @@ test("PENDIENTE CONOCIDO: naming sobrestima en el caso B2", () => {
     ciudad_tier: "tier1",
     territorio_lado: 10,
   });
+  const desvio = Math.abs(objetivo - 17_000_000) / 17_000_000;
   assert.ok(
-    objetivo > 6_500_000 * 2,
-    "si esto deja de sobrestimar, ya se corrigió la base de naming — actualiza este test",
+    desvio < 0.03,
+    `B2: esperado ~$17,000,000, obtenido $${Math.round(objetivo).toLocaleString()} (${(desvio * 100).toFixed(1)}%)`,
   );
+});
+
+/**
+ * Ultra México es el ancla FUERTE: deal real cerrado en $5,000,000
+ * (45,000 pers · 3 días · line-up A · CDMX · oficial · exclusiva).
+ *
+ * Se fija aquí para que cualquier recalibración futura de `oficial` tenga
+ * que enfrentarlo. Ojo: asume territorio 5x5 porque no sabemos cuál tuvo
+ * en realidad — ese es el hueco abierto que impide cerrar la calibración.
+ */
+test("ANCLA FUERTE: Ultra México (deal real) sigue cuadrando", () => {
+  const { objetivo } = computePrice({
+    activacion: "oficial",
+    aforo: 45000,
+    dias: 3,
+    lineup: "A",
+    exclusiva: true,
+    ciudad_tier: "tier1",
+    territorio_lado: 5,
+  });
+  const desvio = Math.abs(objetivo - 5_000_000) / 5_000_000;
+  assert.ok(desvio < 0.05, `Ultra: obtenido $${Math.round(objetivo).toLocaleString()}`);
 });

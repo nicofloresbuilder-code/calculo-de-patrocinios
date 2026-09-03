@@ -184,3 +184,38 @@ Ese segundo caso es el que justifica la feature: sin él, un deal 50/50 en event
 `supabase/migrations/0002_territorio_producto.sql` agrega `territorio_lado`, `paga_con_producto` y `monto_producto` a `cotizaciones`, y marca las cotizaciones viejas con `territorio_lado = 5` (el estándar implícito) en vez de dejarlas en NULL. **Pendiente de correr** en el SQL Editor — sin eso, Guardar cotización fallará. No hay regresión porque hoy ya está bloqueado por el pendiente de Google OAuth.
 
 **Tests:** 26/26 (10 nuevos: 8 de territorio anclados a sus precios reales, y los de producto incluyendo el caso de valor muerto).
+
+### Recalibración de `naming` (misma sesión)
+
+Se bajó `BASE_ACTIVACION.naming` de **$2,000,000 a $1,650,000**, con lo que B2 pasa de $20.6M a **$17,027,010** (+0.2% del precio que fijó Nicolás).
+
+**Cómo se llegó al número, porque importa para quien lo revise después:** Nicolás cotizó B2 primero en $6.5M. Se le mostró que la fórmula daba $20.6M y el análisis de que `naming` valía 1.3x `oficial` en sus precios contra 2.5x en la fórmula. Entonces revisó su propio número a $17M ("tienes razón").
+
+Se le señaló explícitamente el riesgo de anclaje —que el número de la fórmula se le presentó **antes** de que revisara el suyo— y aun así decidió $17M. Se aplica porque él es quien conoce el mercado, pero queda anotado en el código y en el test que **este ancla es más débil que las otras**: no es un precio observado en frío ni un deal cerrado, a diferencia de Ultra México ($5M real). Si alguien recalibra en el futuro, debe pesar Ultra por encima de B2.
+
+`naming` queda en 2.06x `oficial`.
+
+### Estado de la calibración: 8 de 9 anclas
+
+| Caso | Evidencia | Real/fijado | Fórmula | Desvío |
+|---|---|---|---|---|
+| A1 2×2 | cotizado | $400,000 | $404,685 | +1.2% |
+| A2 5×5 | cotizado | $1,200,000 | $1,190,250 | −0.8% |
+| A3 10×10 | cotizado | $2,000,000 | $1,999,620 | −0.0% |
+| A4 15×15 | cotizado | $3,200,000 | $3,201,772 | +0.1% |
+| B1 | cotizado | $300,000 | $315,000 | +5.0% |
+| B2 naming | revisado | $17,000,000 | $17,027,010 | +0.2% |
+| Ultra México | **deal real** | $5,000,000 | $4,914,000 | −1.7% |
+| Match Cup | **deal real** | $300,000 | $252,000 | −16.0% |
+| **Goleiro** | **deal real** | $1,000,000 | $1,656,000 | **+65.6%** |
+
+### Goleiro: descartada la hipótesis de `duracion`
+
+Con el Grupo A ahora disponible se pudo probar la sospecha que quedó abierta en el Commit 7 (que el desvío de Goleiro venía de `duracion` sobre-pesada). **No es eso**, y la comparación lo deja claro:
+
+- A2 — 15,000 pers · **2 días** · line-up B · oficial · exclusiva · 5×5 → él cotiza **$1,200,000**
+- Goleiro — 15,000 pers · **5 días** · line-up B · oficial · exclusiva → cerró en **$1,000,000**
+
+Goleiro es **más largo y más barato** que su propia cotización de la versión de 2 días. Para que la fórmula lo reprodujera, el factor de duración a 5 días tendría que ser ~0.97 — menos que 1.0, o sea que un evento de 5 días valdría menos que uno de 1 día. Eso no es una curva de duración, es señal de que la diferencia está en otra parte.
+
+**Hipótesis nueva a probar (no aplicada):** que `aforo` esté mal definido — si en Goleiro los 15,000 son asistencia **total repartida en 5 días** (~3,000/día) y en el Grupo A son 15,000 **por día**, la fórmula está multiplicando aforo × duración sobre la misma gente y duplicando el conteo. Falta confirmarlo con Nicolás antes de tocar nada.
