@@ -144,3 +144,41 @@ test("ANCLA FUERTE: Ultra México (deal real) sigue cuadrando", () => {
   const desvio = Math.abs(objetivo - 5_000_000) / 5_000_000;
   assert.ok(desvio < 0.05, `Ultra: obtenido $${Math.round(objetivo).toLocaleString()}`);
 });
+
+/**
+ * GOLEIRO — parámetros reales confirmados por Nicolás (2026-08-30):
+ * 15,000 asistentes EN TOTAL repartidos en 5 días (~3,000/día), y
+ * territorio 10x10. Deal real cerrado en $1,000,000.
+ *
+ * Con eso, Goleiro y el caso A3 forman un PAR CONTROLADO: idénticos en
+ * todo (15,000 asistentes, line-up B, CDMX, oficial, exclusiva, 10x10)
+ * salvo los días — 2 vs 5 — y el precio se parte a la mitad:
+ *
+ *     A3, 2 días  -> $2,000,000   (7,500 personas/día)
+ *     Goleiro, 5 días -> $1,000,000   (3,000 personas/día)
+ *
+ * O sea: repartir la MISMA gente en más días BAJA el valor. La fórmula
+ * actual hace lo contrario — multiplica aforo × duración, contando la
+ * misma gente 5 veces y encima premiando por durar más. Por eso Goleiro
+ * sale sobrestimado.
+ *
+ * El arreglo no es un coeficiente sino estructural: el driver debería ser
+ * la DENSIDAD (asistentes/día), no el total × duración. No se aplicó aún
+ * porque falta confirmar si el "15,000" del Grupo A también es total (si
+ * fuera por día, todo el análisis cambia). Ver DECISIONS.md.
+ */
+test("PENDIENTE ESTRUCTURAL: Goleiro sobrestima por doble conteo de gente", () => {
+  const { objetivo } = computePrice({
+    activacion: "oficial",
+    aforo: 15000,
+    dias: 5,
+    lineup: "B",
+    exclusiva: true,
+    ciudad_tier: "tier1",
+    territorio_lado: 10, // confirmado por Nicolás
+  });
+  assert.ok(
+    objetivo > 1_000_000 * 1.5,
+    "si Goleiro dejó de sobrestimar, ya se cambió el driver a densidad — actualiza este test",
+  );
+});

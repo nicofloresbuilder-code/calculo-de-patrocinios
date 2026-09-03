@@ -219,3 +219,50 @@ Con el Grupo A ahora disponible se pudo probar la sospecha que quedó abierta en
 Goleiro es **más largo y más barato** que su propia cotización de la versión de 2 días. Para que la fórmula lo reprodujera, el factor de duración a 5 días tendría que ser ~0.97 — menos que 1.0, o sea que un evento de 5 días valdría menos que uno de 1 día. Eso no es una curva de duración, es señal de que la diferencia está en otra parte.
 
 **Hipótesis nueva a probar (no aplicada):** que `aforo` esté mal definido — si en Goleiro los 15,000 son asistencia **total repartida en 5 días** (~3,000/día) y en el Grupo A son 15,000 **por día**, la fórmula está multiplicando aforo × duración sobre la misma gente y duplicando el conteo. Falta confirmarlo con Nicolás antes de tocar nada.
+
+### Goleiro resuelto (la causa, no todavía el arreglo)
+
+Nicolás confirmó los dos datos que faltaban: **Goleiro fueron 15,000 asistentes EN TOTAL repartidos en los 5 días (~3,000/día), con territorio 10×10.**
+
+Con eso, Goleiro y el caso A3 forman un **par controlado** — idénticos en absolutamente todo salvo los días:
+
+| | A3 (cotizado) | Goleiro (cerrado) |
+|---|---|---|
+| asistencia | 15,000 total | 15,000 total |
+| **días** | **2** | **5** |
+| line-up | B | B |
+| ciudad | CDMX tier1 | CDMX tier1 |
+| activación | oficial | oficial |
+| exclusividad | sí | sí |
+| territorio | 10×10 | 10×10 |
+| **precio** | **$2,000,000** | **$1,000,000** |
+
+**Misma gente, mismo espacio, mismo todo — repartida en 5 días en vez de 2, vale la mitad.** (7,500/día vs 3,000/día.)
+
+La fórmula hace exactamente lo contrario: multiplica `aforo` × `duracion`, o sea cuenta la misma gente cinco veces **y encima premia por durar más**. De ahí el +65.6%.
+
+**El arreglo no es un coeficiente, es estructural:** el driver debería ser la **densidad** (asistentes/día), no el total multiplicado por duración.
+
+### Explorando el modelo de densidad — dos hallazgos más
+
+Despejando qué factor de densidad exige cada ancla (quitando base, line-up, exclusividad, ciudad y territorio):
+
+| Caso | gente/día | factor exigido |
+|---|---|---|
+| B1 | 2,000 | 0.667 |
+| Goleiro | 3,000 | 0.431 |
+| A1–A4 | 7,500 | 0.853 – 0.870 |
+| B2 | 15,000 | 2.920 |
+
+**Hallazgo 1 — el territorio queda confirmado.** Los cuatro casos del Grupo A, que solo difieren en territorio, exigen el *mismo* factor de densidad (0.853–0.870, ±1%). Eso significa que el factor de territorio ya absorbe correctamente toda la diferencia entre ellos. Es validación independiente de la calibración.
+
+**Hallazgo 2 — parece haber un PISO de precio, no una curva.** B1 (2,000/día) exige 0.667, más que Goleiro (3,000/día) con 0.431. Eso rompe la monotonía: menos gente no debería valer más. La explicación probable es un mínimo comercial:
+
+- Match Cup — 2,000 pers · **sin** exclusividad → **$300,000** (real)
+- B1 — 2,000 pers · **con** exclusividad → **$300,000** (cotizado)
+
+Mismo precio con y sin exclusividad. El factor de 1.25 de exclusividad no mueve nada porque ambos están pegados al piso. **$300,000 parece ser el mínimo por debajo del cual no vale la pena vender un patrocinio**, sin importar qué diga la fórmula.
+
+Si se confirma, el modelo sería `max(PISO, fórmula)` — y explicaría de paso el -16% que quedó pendiente en Match Cup desde el Commit 7.
+
+**Bloqueante antes de recalibrar:** falta confirmar si el "15,000 personas" del Grupo A también es total (como Goleiro) o por día. Si fuera por día, todo este análisis cambia. También sigue sin saberse el territorio de Ultra México — y ahí hay una pista: si Ultra tuvo 5×5, su factor de densidad sale en 2.976, casi idéntico al 2.920 de B2 con la misma densidad (15,000/día). Eso lo haría consistente.
