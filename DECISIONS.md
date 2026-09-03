@@ -93,3 +93,28 @@ Match Cup mejoró de 64% de error a 16% — no perfecto, pero un fix real y aisl
 1. Resolver el bloqueo de Vercel (revisar billing/verificación de cuenta) y redeploy — deploy 2, cierra Commit 5 y Commit 7 del todo en producción.
 2. Depurar `redirect_uri_mismatch` de Google OAuth: en Google Cloud Console → Credentials, confirmar cuántos OAuth Client IDs existen y cuál tiene el redirect URI realmente guardado (con Save dado); asegurar que ese mismo Client ID/Secret sea el que está pegado en Supabase.
 3. Con un deal real más (idealmente otro chico o mediano con `oficial`), investigar el sobrepeso de Goleiro: aislar si es `duracion`, la `base` de `oficial`, o ambos, antes de tocar la fórmula otra vez.
+
+---
+
+## Sesión — 2026-08-30 — Deploy 2: se desbloqueó lo que llevaba 15 días trabado
+
+**Contexto:** se retomó Aforo después de terminar Cotejo (Semana 3). Los tres pendientes documentados arriba seguían abiertos; se atacó el primero.
+
+**Qué se encontró:**
+
+1. **El bloqueo de Vercel ya no aplicaba.** Todos los deploys del proyecto seguían con 15 días de antigüedad y status `UNKNOWN`. Pero durante la sesión de Cotejo se hicieron ~8 deploys exitosos con la **misma cuenta** (`dime5`), lo que descartaba una restricción a nivel cuenta. Se corrió `vercel deploy --prod` y quedó `READY` a la primera. **El bloqueo era temporal, no una restricción de billing como se sospechaba.**
+
+2. **El fix de la fórmula del Commit 7 ya estaba vivo** una vez desplegado: probado en el dominio corto con los inputs de Match Cup (aforo 2,000 · 1 día · line-up C · proveedor · tier1) → objetivo **$252,000**, que es el valor corregido (`AFORO_FACTOR_MIN = 0.7`), no los $108,000 de la versión vieja.
+
+3. **La narrativa con IA seguía rota, por una causa distinta a la documentada.** El error en producción era `ANTHROPIC_API_KEY no está configurada en el servidor`, aunque `vercel env ls` sí listaba la variable con el nombre correcto y scope Production. La hipótesis: quedó con **valor vacío** desde el intento manual de hace 15 días (el mismo episodio del typo `anhtropic_api_key`). Como las variables tipo `Secret` no se pueden leer de vuelta, no era verificable — se resolvió **reescribiéndola**: borrar y volver a crear con el valor real, en `production`, `preview` y `development`.
+
+**Resultado — verificado en producción, no supuesto:**
+- `POST /api/narrativa` en el dominio público regresa una narrativa real generada por el modelo.
+- Flujo completo probado en el navegador sobre la URL en vivo: se llenan las variables de Match Cup → rango $189,000–$327,600, objetivo $252,000 → desglose (Aforo 66%, Ciudad 34%) → narrativa renderizada bajo "POR QUÉ ESTE RANGO", con su etiqueta "Generado por IA · el precio no cambia".
+- 7/7 tests de `pricing.test.ts` siguen pasando.
+
+**Nota de transparencia:** la `ANTHROPIC_API_KEY` que se puso es la misma llave que Nicolás proporcionó durante la sesión de Cotejo — su propia llave, en su propio proyecto. Si prefiere una llave separada por proyecto (para poder medir el costo de cada uno por separado, o revocar una sin tumbar la otra), es cambiarla en Vercel y redeployar.
+
+**Pendientes que siguen abiertos** (sin cambio):
+1. **Google OAuth `redirect_uri_mismatch`** — el login sigue sin completarse, así que Guardar cotización / Mis cotizaciones no se pueden probar de punta a punta con un usuario real. El código y las policies de RLS ya están verificados por separado con curl.
+2. **Sobrestimación de Goleiro (+65.6%)** — sigue esperando un deal real más para aislar si la causa es `duracion`, la `base` de `oficial`, o la interacción de ambos. No se toca sin evidencia; el test de regresión que lo documenta sigue en su lugar.
