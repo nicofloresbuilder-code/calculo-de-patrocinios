@@ -4,6 +4,8 @@ import {
   CIUDAD_TIER_OPTIONS,
   DIAS_MAX,
   LINEUP_OPTIONS,
+  TERRITORIO_MAX,
+  TERRITORIO_MIN,
   type EventoInput,
 } from "./types";
 
@@ -53,6 +55,22 @@ export function validateEvento(input: EventoInput): EventoErrors {
 
   if (!CIUDAD_TIER_VALUES.has(input.ciudad_tier)) {
     errors.ciudad_tier = "Selecciona una ciudad/tier válida.";
+  }
+
+  if (!Number.isFinite(input.territorio_lado) || input.territorio_lado <= 0) {
+    errors.territorio_lado = "El territorio debe ser mayor a 0.";
+  } else if (input.territorio_lado < TERRITORIO_MIN) {
+    errors.territorio_lado = `Mínimo ${TERRITORIO_MIN}×${TERRITORIO_MIN} m.`;
+  } else if (input.territorio_lado > TERRITORIO_MAX) {
+    errors.territorio_lado = `Máximo ${TERRITORIO_MAX}×${TERRITORIO_MAX} m.`;
+  }
+
+  if (input.paga_con_producto) {
+    if (!Number.isFinite(input.monto_producto) || input.monto_producto <= 0) {
+      errors.monto_producto = "Indica cuánto del deal llega en producto.";
+    } else if (input.monto_producto > 1_000_000_000) {
+      errors.monto_producto = "Monto fuera de rango.";
+    }
   }
 
   return errors;

@@ -7,6 +7,7 @@ import { RangoBar } from "./RangoBar";
 import { DesglosePanel } from "./DesglosePanel";
 import { RacionalPanel, type RacionalState } from "./RacionalPanel";
 import { GuardarCotizacion } from "./GuardarCotizacion";
+import { ProductoPanel } from "./ProductoPanel";
 import { computePrice, type ComputePriceResult } from "@/lib/pricing";
 import type { EventoInput } from "@/lib/types";
 
@@ -86,6 +87,17 @@ export function Cotizador() {
             </>
           )}
         </Panel>
+
+        {resultado && evento?.paga_con_producto && evento.monto_producto > 0 && (
+          <Panel title="Pago en especie · ¿se puede hacer líquido?">
+            <ProductoPanel
+              montoEnProducto={evento.monto_producto}
+              montoEfectivo={Math.max(0, resultado.objetivo - evento.monto_producto)}
+              aforo={evento.aforo}
+              dias={evento.dias}
+            />
+          </Panel>
+        )}
 
         <div className="grid grid-cols-1 gap-6 md:grid-cols-[2fr_1fr]">
           <Panel title="Desglose por variable">

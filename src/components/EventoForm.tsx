@@ -7,6 +7,9 @@ import {
   CIUDAD_TIER_OPTIONS,
   DIAS_MAX,
   LINEUP_OPTIONS,
+  TERRITORIO_MAX,
+  TERRITORIO_MIN,
+  TERRITORIO_PRESETS,
   type EventoInput,
 } from "@/lib/types";
 import { validateEvento, type EventoErrors } from "@/lib/validateEvento";
@@ -19,6 +22,9 @@ const initialForm: EventoInput = {
   exclusiva: false,
   activacion: "oficial",
   ciudad_tier: "tier1",
+  territorio_lado: 5,
+  paga_con_producto: false,
+  monto_producto: 0,
 };
 
 const inputClass =
@@ -175,6 +181,82 @@ export function EventoForm({
             </option>
           ))}
         </select>
+      </div>
+
+      <div>
+        <label className={labelClass} htmlFor="territorio_lado">
+          Territorio de la activación
+        </label>
+        <div className="mb-2 flex gap-1.5">
+          {TERRITORIO_PRESETS.map((lado) => (
+            <button
+              key={lado}
+              type="button"
+              onClick={() => handleChange("territorio_lado", lado)}
+              className={`flex-1 rounded-md border px-2 py-1.5 text-xs transition-colors ${
+                form.territorio_lado === lado
+                  ? "border-aforo-accent bg-aforo-accent/15 text-aforo-accent"
+                  : "border-aforo-panel-border bg-aforo-input text-aforo-fg-muted hover:border-aforo-accent/50"
+              }`}
+            >
+              {lado}×{lado}
+            </button>
+          ))}
+        </div>
+        <div className="flex items-center gap-2">
+          <input
+            id="territorio_lado"
+            type="number"
+            className={inputClass}
+            value={form.territorio_lado || ""}
+            min={TERRITORIO_MIN}
+            max={TERRITORIO_MAX}
+            step={0.5}
+            onChange={(e) => handleChange("territorio_lado", Number(e.target.value))}
+          />
+          <span className="whitespace-nowrap text-xs text-aforo-fg-muted">
+            m por lado · {(form.territorio_lado || 0) ** 2} m²
+          </span>
+        </div>
+        {errors.territorio_lado && <p className={errorClass}>{errors.territorio_lado}</p>}
+      </div>
+
+      <div className="space-y-3 rounded-md border border-aforo-panel-border bg-aforo-input/50 p-3">
+        <div className="flex items-center justify-between">
+          <label htmlFor="paga_con_producto" className="text-sm text-aforo-fg">
+            Paga parte con producto
+          </label>
+          <input
+            id="paga_con_producto"
+            type="checkbox"
+            className="h-4 w-4 accent-aforo-accent"
+            checked={form.paga_con_producto}
+            onChange={(e) => handleChange("paga_con_producto", e.target.checked)}
+          />
+        </div>
+
+        {form.paga_con_producto && (
+          <div>
+            <label className={labelClass} htmlFor="monto_producto">
+              ¿Cuánto del deal llega en producto?
+            </label>
+            <input
+              id="monto_producto"
+              type="number"
+              className={inputClass}
+              value={form.monto_producto || ""}
+              min={0}
+              step={10_000}
+              placeholder="500,000"
+              onChange={(e) => handleChange("monto_producto", Number(e.target.value))}
+            />
+            <p className="mt-1 text-xs text-aforo-fg-muted">
+              A valor declarado por la marca. Abajo verás si de verdad se puede
+              hacer líquido.
+            </p>
+            {errors.monto_producto && <p className={errorClass}>{errors.monto_producto}</p>}
+          </div>
+        )}
       </div>
 
       <button

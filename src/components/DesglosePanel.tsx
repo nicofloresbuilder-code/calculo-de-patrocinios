@@ -2,6 +2,7 @@ import type { PriceFactors } from "@/lib/pricing";
 
 const LABELS: Record<keyof PriceFactors, string> = {
   aforo: "Aforo",
+  territorio: "Territorio",
   lineup: "Line-up",
   exclusividad: "Exclusividad",
   duracion: "Duración",
@@ -12,6 +13,7 @@ const LABELS: Record<keyof PriceFactors, string> = {
 // en el mismo orden visual sin importar cómo se insertó cada llave.
 const ORDER: (keyof PriceFactors)[] = [
   "aforo",
+  "territorio",
   "lineup",
   "exclusividad",
   "duracion",

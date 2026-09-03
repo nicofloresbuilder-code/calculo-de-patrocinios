@@ -118,3 +118,69 @@ Match Cup mejoró de 64% de error a 16% — no perfecto, pero un fix real y aisl
 **Pendientes que siguen abiertos** (sin cambio):
 1. **Google OAuth `redirect_uri_mismatch`** — el login sigue sin completarse, así que Guardar cotización / Mis cotizaciones no se pueden probar de punta a punta con un usuario real. El código y las policies de RLS ya están verificados por separado con curl.
 2. **Sobrestimación de Goleiro (+65.6%)** — sigue esperando un deal real más para aislar si la causa es `duracion`, la `base` de `oficial`, o la interacción de ambos. No se toca sin evidencia; el test de regresión que lo documenta sigue en su lugar.
+
+## Sesión — 2026-08-30 (2) — Territorio + pago en especie
+
+**Qué pidió Nicolás:** agregar el territorio de la activación (2x2 hasta 15x15, personalizable) y el análisis de cuando la marca paga parte del deal con producto.
+
+### Calibración de territorio — con precios reales, no inventados
+
+Nicolás dio 6 precios de referencia. Los 4 del Grupo A varían **solo** el territorio (15,000 pers · 2 días · line-up B · CDMX · oficial · con exclusividad), que es exactamente lo que se necesita para aislar la variable:
+
+| Territorio | Su precio | $/m² | $/metro lineal |
+|---|---|---|---|
+| 2×2 | $400,000 | $100,000 | $200,000 |
+| 5×5 | $1,200,000 | $48,000 | $240,000 |
+| 10×10 | $2,000,000 | $20,000 | $200,000 |
+| 15×15 | $3,200,000 | $14,222 | $213,333 |
+
+**Hallazgo:** el precio por m² se desploma (100K → 14K), pero **el precio por metro lineal de lado se mantiene casi constante** (~200–240K). Su intuición comercial cobra por **frente/visibilidad**, no por superficie. Por eso el factor se ancla al lado en metros, no al área — modelarlo por m² habría producido precios absurdos en los extremos.
+
+**Segundo hallazgo:** al derivar el factor, el 5×5 sale en **1.00**. O sea, el 5×5 ya era el estándar implícito de la fórmula anterior (que sin territorio daba $1,190,250 para ese evento, contra los $1,200,000 que él cotiza para 5×5). Anclar ahí significa que **agregar territorio no recalibra nada de lo ya validado** — las cotizaciones históricas siguen siendo consistentes.
+
+Se implementó como interpolación lineal entre las 4 anclas reales, en vez de ajustar una curva. Son sus datos, no una función inventada. Fuera del rango se extrapola con la pendiente del tramo extremo.
+
+**Verificado:** los 4 casos reproducen sus precios con <1.2% de desvío (probado en el navegador, no solo en tests). B1 (evento chico) queda a +5%.
+
+### Hallazgo importante: `naming` está sobrevaluado en la fórmula
+
+El caso B2 (45,000 pers · 3 días · line-up A · CDMX · **naming** · exclusiva · 10×10) él lo cotiza en **$6,500,000**. La fórmula da **$20.6M** — +217%.
+
+Se aisló la causa comparando contra un deal real del mismo perfil:
+
+- Ultra México, **oficial**, real cerrado: **$5,000,000**
+- B2, **naming**, cotizado por él: **$6,500,000**
+- → en sus precios reales, `naming` vale **1.3×** lo que `oficial`
+- → pero la fórmula asume **2.5×** (base $2M vs $800K)
+
+**No se corrigió todavía**, por dos razones: la base de `naming` se calibraría con solo 2 puntos, y —más importante— **no sabemos qué territorio tenían los deals históricos**. El match de -1.7% de Ultra en el Commit 7 asumía implícitamente un territorio; si Ultra tenía una activación grande (probable en un deal de $5M), la base estaba sobreajustada. Corregir `naming` sin saber eso sería cambiar un número por otra corazonada.
+
+Queda un test que **documenta el desvío en vez de esconderlo** (`territorio.test.ts`), y que truena a propósito si alguien lo arregla, para forzar que se actualice con el número nuevo.
+
+### Pago en especie (`src/lib/producto.ts`)
+
+El modelo real: un deal de $1M puede cerrarse 50/50 — $500K en efectivo y $500K en producto. Ese producto no cuesta (es parte del pago), se vende en el festival, y **toda la venta es margen**.
+
+La pregunta que contesta el módulo no es "cuánto vendemos" sino **si ese producto se puede hacer líquido** — palabras de Nicolás: *"lo importante es que nosotros lo podamos hacer líquido fácilmente"*.
+
+```
+unidadesRecibidas   = montoEnProducto / precio declarado por la marca
+capacidadVenta      = aforo × días × consumo por persona/día
+unidadesVendibles   = min(recibidas, capacidad)
+ingreso             = vendibles × precio de venta en festival
+montoMáximoRecomendado = capacidad × precio declarado
+```
+
+Los tres supuestos (valor declarado, precio de venta, consumo) son **editables en pantalla y están marcados como supuestos** — Nicolás no tiene los números históricos todavía, así que se propusieron defaults en vez de fingir precisión.
+
+**Verificado en el navegador con sus dos escenarios:**
+- Evento de 15,000 × 2 días + $500K en producto → se liquida completo, ingreso $2,333,333, múltiplo **4.67×**. El deal presentado como $3.2M **vale $5.03M**.
+- Mismo producto en evento de 2,000 × 1 día → solo absorbe 4,000 de 33,333 unidades. Sobran **$440,000 de valor muerto**, múltiplo cae a **0.56×**, y el deal **vale menos** de lo que aparenta. Máximo recomendado: $60,000.
+
+Ese segundo caso es el que justifica la feature: sin él, un deal 50/50 en evento chico se vería igual de bueno que en uno grande.
+
+### Base de datos
+
+`supabase/migrations/0002_territorio_producto.sql` agrega `territorio_lado`, `paga_con_producto` y `monto_producto` a `cotizaciones`, y marca las cotizaciones viejas con `territorio_lado = 5` (el estándar implícito) en vez de dejarlas en NULL. **Pendiente de correr** en el SQL Editor — sin eso, Guardar cotización fallará. No hay regresión porque hoy ya está bloqueado por el pendiente de Google OAuth.
+
+**Tests:** 26/26 (10 nuevos: 8 de territorio anclados a sus precios reales, y los de producto incluyendo el caso de valor muerto).

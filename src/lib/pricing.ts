@@ -32,6 +32,64 @@ export function clamp(v: number, min: number, max: number): number {
 const AFORO_FACTOR_MIN = 0.7;
 const AFORO_FACTOR_MAX = 3.0;
 
+/**
+ * Factor de territorio — calibrado con precios reales de Nicolás
+ * (sesión 2026-08-30), sobre un mismo evento variando SOLO el espacio:
+ * 15,000 personas · 2 días · line-up B · CDMX · oficial · con exclusividad.
+ *
+ *   2x2  -> $400,000     5x5  -> $1,200,000
+ *   10x10 -> $2,000,000  15x15 -> $3,200,000
+ *
+ * Dos hallazgos de esos números:
+ *
+ * 1. El precio por m² se desploma (100K -> 14K), pero el precio por METRO
+ *    LINEAL de lado se mantiene casi constante (~200-240K). Es decir: la
+ *    intuición comercial cobra por FRENTE/visibilidad, no por superficie.
+ *    Por eso el factor se ancla al LADO en metros, no al área.
+ *
+ * 2. El 5x5 sale en 1.00 — o sea, el 5x5 ya era el estándar implícito de
+ *    la fórmula anterior (que sin territorio daba $1,190,250 para ese
+ *    evento, contra los $1,200,000 que él cotiza para 5x5). Anclarlo ahí
+ *    hace que agregar territorio NO recalibre nada de lo ya validado.
+ *
+ * Entre anclas se interpola linealmente; fuera del rango se extrapola con
+ * la pendiente del tramo extremo. Se usan las anclas reales en vez de
+ * ajustar una curva porque son datos suyos, no una función inventada.
+ */
+export const TERRITORIO_ANCLAS: { lado: number; factor: number }[] = [
+  { lado: 2, factor: 0.34 },
+  { lado: 5, factor: 1.0 },
+  { lado: 10, factor: 1.68 },
+  { lado: 15, factor: 2.69 },
+];
+
+export const TERRITORIO_LADO_MIN = 1;
+export const TERRITORIO_LADO_MAX = 30;
+
+/** Factor multiplicador según el lado (en metros) del espacio de activación. */
+export function territorioFactor(lado: number): number {
+  const anclas = TERRITORIO_ANCLAS;
+  const pendiente = (a: number, b: number) =>
+    (anclas[b].factor - anclas[a].factor) / (anclas[b].lado - anclas[a].lado);
+
+  if (lado <= anclas[0].lado) {
+    // Por debajo de 2x2: extrapola con la pendiente del primer tramo,
+    // con piso para que un stand diminuto nunca haga el precio ~0.
+    return Math.max(0.15, anclas[0].factor + (lado - anclas[0].lado) * pendiente(0, 1));
+  }
+  for (let i = 0; i < anclas.length - 1; i++) {
+    if (lado <= anclas[i + 1].lado) {
+      const t = (lado - anclas[i].lado) / (anclas[i + 1].lado - anclas[i].lado);
+      return anclas[i].factor + t * (anclas[i + 1].factor - anclas[i].factor);
+    }
+  }
+  // Arriba de 15x15: extrapola con la pendiente del último tramo.
+  const ultimo = anclas.length - 1;
+  return (
+    anclas[ultimo].factor + (lado - anclas[ultimo].lado) * pendiente(ultimo - 1, ultimo)
+  );
+}
+
 export interface ComputePriceInput {
   activacion: Activacion;
   aforo: number;
@@ -39,6 +97,8 @@ export interface ComputePriceInput {
   lineup: Lineup;
   exclusiva: boolean;
   ciudad_tier: CiudadTier;
+  /** Lado en metros del espacio de activación (2 = 2x2). Default 5x5. */
+  territorio_lado?: number;
 }
 
 export interface PriceFactors {
@@ -47,6 +107,7 @@ export interface PriceFactors {
   lineup: number;
   exclusividad: number;
   ciudad: number;
+  territorio: number;
 }
 
 export interface ComputePriceResult {
@@ -74,6 +135,7 @@ export function computePrice({
   lineup,
   exclusiva,
   ciudad_tier,
+  territorio_lado = 5,
 }: ComputePriceInput): ComputePriceResult {
   const base = BASE_ACTIVACION[activacion];
 
@@ -83,6 +145,7 @@ export function computePrice({
     lineup: LINEUP_FACTOR[lineup],
     exclusividad: exclusiva ? 1.25 : 1.0,
     ciudad: CIUDAD_FACTOR[ciudad_tier],
+    territorio: territorioFactor(territorio_lado),
   };
 
   const totalFactor = Object.values(factors).reduce((a, b) => a * b, 1);

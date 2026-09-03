@@ -52,6 +52,10 @@ export function GuardarCotizacion({
       exclusiva: evento.exclusiva,
       activacion: evento.activacion,
       ciudad_tier: evento.ciudad_tier,
+      // Requieren la migración 0002_territorio_producto.sql.
+      territorio_lado: evento.territorio_lado,
+      paga_con_producto: evento.paga_con_producto,
+      monto_producto: evento.paga_con_producto ? evento.monto_producto : null,
       precio_min: resultado.min,
       precio_objetivo: resultado.objetivo,
       precio_max: resultado.max,
