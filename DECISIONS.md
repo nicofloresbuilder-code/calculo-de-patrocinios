@@ -339,3 +339,48 @@ El proyecto está pausado o borrado — Supabase suspende los proyectos del plan
 3. La migración `0002_territorio_producto.sql` no se puede correr hasta reactivar el proyecto.
 
 El lado bueno: la preocupación de que Goleiro contaminara las cotizaciones vía comparables **no aplica hoy**, porque no está llegando ningún comparable. Cuando se reactive el proyecto, hay que revisar ese registro antes de que la IA lo empiece a citar.
+
+### Revisión del proyecto de Supabase (a petición de Nicolás)
+
+**Confirmado con tres resolvedores independientes** — no es caché local ni red:
+
+```
+ietahcthuejmgjlmgsub.supabase.co   8.8.8.8 -> NXDOMAIN   1.1.1.1 -> NXDOMAIN
+btockirecdxmkuztokwr.supabase.co   8.8.8.8 -> resuelve   (control: el de Cotejo)
+supabase.com                       -> 200 (el servicio está arriba)
+```
+
+Un proyecto **pausado** normalmente conserva su subdominio y responde con error; NXDOMAIN apunta más bien a **borrado**. No se puede confirmar cuál sin entrar al dashboard, que es de Nicolás.
+
+**Qué sigue funcionando en producción, medido:**
+
+| | Estado |
+|---|---|
+| La app carga | ✅ 200 |
+| Cálculo de precio y desglose | ✅ (es del lado del cliente, no toca la base) |
+| Narrativa con IA | ✅ genera bien |
+| Comparables citados | ❌ `[]` — siempre vacío |
+| Guardar cotización | ❌ (además del pendiente de Google OAuth) |
+
+O sea que **la propuesta de valor central sigue en pie para una demo**; lo que se perdió es el contexto histórico en la narrativa y el guardado.
+
+### HALLAZGO: el seed de comparables tenía los montos viejos
+
+Al preparar el archivo de recuperación se encontró algo que llevaba desde el Commit 7: **las cifras reales se usaron para recalibrar la fórmula pero nunca se escribieron de vuelta a la tabla `comparables`.**
+
+| Deal | En el seed | Real | Error |
+|---|---|---|---|
+| Ultra México 2026 | $1,200,000 | $5,000,000 | **−76%** |
+| Goleiro FanFest | $650,000 | $1,000,000 | −35% |
+| Match Cup | $300,000 | $300,000 | correcto |
+
+La fórmula quedó calibrada con los números buenos mientras la tabla que la IA cita como "comparables históricos" seguía con los malos. Con Ultra 4× por debajo de su valor, la narrativa podía estar usándolo para justificar cotizaciones bajas — un error que se habría reactivado en cuanto volviera la base, sin que nadie lo notara.
+
+Se agregó `0003_corregir_comparables.sql` para arreglarlo en un proyecto existente, y se corrigió el seed en el archivo de recuperación.
+
+### Archivos listos para cualquiera de los dos escenarios
+
+- **Si el proyecto solo estaba pausado y se reactiva:** correr `0002_territorio_producto.sql` y `0003_corregir_comparables.sql`.
+- **Si hay que crear uno nuevo:** correr `setup-proyecto-nuevo.sql` (unión de las tres, con montos ya corregidos), y actualizar `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_ANON_KEY` y `SUPABASE_SERVICE_ROLE_KEY` en Vercel y en `.env.local`.
+
+**Decisión pendiente para Nicolás:** si Goleiro debe seguir sirviendo como comparable para la IA. Es un hecho histórico real, pero él mismo lo marcó como subvaluado — citarlo empuja las cotizaciones hacia abajo. El monto se corrigió; si debe salir de la tabla, es decisión suya.
