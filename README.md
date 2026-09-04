@@ -53,6 +53,7 @@ npx tsc --noEmit # typecheck
 | `DESIGN-SYSTEM.md` | Tokens, primitivas, reglas de uso, contrastes verificados |
 | `PRODUCT-UI-AUDIT.md` | Auditoría de UX/UI/frontend/accesibilidad y prioridades |
 | `RBAC-ARCHITECTURE.md` | Modelo de usuarios, roles y permisos; capas de seguridad |
+| `SECURITY-AUDIT.md` | Auditoría de seguridad: 20 controles, hallazgos, correcciones y pendientes |
 | `DECISIONS.md` | Bitácora de decisiones: por qué cada número de la fórmula es el que es |
 | `docs/PACKET.md` | El problema, el usuario y el benchmark |
 | `.claude/skills/` | Guías de trabajo para agentes de código en este repo |
@@ -60,8 +61,13 @@ npx tsc --noEmit # typecheck
 ## Base de datos
 
 Migraciones en `supabase/migrations/`, se corren en orden en el SQL Editor de
-Supabase. `0004_rbac.sql` está **escrita pero no aplicada** — ver
-`RBAC-ARCHITECTURE.md` §6.
+Supabase.
+
+**Escritas y sin aplicar todavía:**
+- `0004_rbac.sql` — perfiles, roles y permisos. Ver `RBAC-ARCHITECTURE.md` §6.
+- `0005_endurecimiento_rls.sql` — **cierra dos vulnerabilidades CRITICAL**.
+  Ver `SECURITY-AUDIT.md` §6-A. Requiere `SUPABASE_SERVICE_ROLE_KEY`
+  configurada en Vercel *antes* de aplicarla.
 
 ## Estructura
 
@@ -75,6 +81,8 @@ src/
 │   └── *.tsx             componentes del cotizador
 ├── lib/
 │   ├── auth/             catálogo de permisos, can(), DAL de sesión
+│   ├── validation/       parseo de entrada no confiable + allowlist de campos
+│   ├── rateLimit.ts      presupuestos de rate limiting por endpoint
 │   ├── supabase/         clientes de servidor y de navegador
 │   ├── navigation.ts     registro de módulos con sus permisos
 │   └── pricing.ts        motor de precio determinista (NO TOCAR sin leer DECISIONS.md)

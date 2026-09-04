@@ -4,7 +4,6 @@ import { useState } from "react";
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/client";
 import type { EventoInput } from "@/lib/types";
-import type { ComputePriceResult } from "@/lib/pricing";
 import { Alert, Button } from "@/components/ui";
 import { Can } from "@/components/auth/Can";
 import { useAuthz } from "@/components/auth/AuthzProvider";
@@ -13,11 +12,10 @@ type Status = "idle" | "saving" | "saved" | "error";
 
 export function GuardarCotizacion({
   evento,
-  resultado,
   narrativa,
 }: {
   evento: EventoInput;
-  resultado: ComputePriceResult;
+  /** Racional generado por la IA. Opcional: la cotización se guarda sin él. */
   narrativa: string | null;
 }) {
   // La sesión ya la resolvió el servidor y bajó por contexto. Antes este
@@ -39,45 +37,37 @@ export function GuardarCotizacion({
     setStatus("saving");
     setError(null);
 
-    const supabase = createClient();
-    const { data: userData } = await supabase.auth.getUser();
-    if (!userData.user) {
-      setStatus("error");
-      setError("Tu sesión expiró. Vuelve a iniciar sesión para guardar.");
-      return;
-    }
+    // El guardado pasa por el servidor, no por el cliente de Supabase.
+    // Motivo: antes el navegador escribía `precio_min/objetivo/max` y
+    // `desglose` directamente en la tabla. RLS impedía escribir en el
+    // renglón de otro usuario, pero no impedía guardar CUALQUIER precio —
+    // y todo el valor del producto depende de que la cifra guardada sea la
+    // que produjo la fórmula. Ahora el servidor la recalcula.
+    //
+    // Solo se mandan las variables del evento. El precio ni siquiera se
+    // envía: el servidor lo ignoraría.
+    try {
+      const res = await fetch("/api/cotizaciones", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ evento, racional: narrativa }),
+      });
 
-    // RLS exige auth.uid() = user_id — se manda explícito, no implícito.
-    const { error: insertError } = await supabase.from("cotizaciones").insert({
-      user_id: userData.user.id,
-      nombre_evento: evento.nombre_evento,
-      aforo: evento.aforo,
-      dias: evento.dias,
-      lineup: evento.lineup,
-      exclusiva: evento.exclusiva,
-      activacion: evento.activacion,
-      ciudad_tier: evento.ciudad_tier,
-      // Requieren la migración 0002_territorio_producto.sql.
-      territorio_lado: evento.territorio_lado,
-      paga_con_producto: evento.paga_con_producto,
-      monto_producto: evento.paga_con_producto ? evento.monto_producto : null,
-      precio_min: resultado.min,
-      precio_objetivo: resultado.objetivo,
-      precio_max: resultado.max,
-      desglose: resultado.desglose,
-      racional: narrativa,
-    });
-
-    if (insertError) {
-      // El mensaje crudo de Supabase se registra para depurar, pero no se le
-      // enseña al usuario: filtra detalle de la base de datos y no es
-      // accionable para quien está cotizando.
-      console.error("Error al guardar la cotización:", insertError);
+      if (!res.ok) {
+        const body = (await res.json().catch(() => null)) as { error?: string } | null;
+        setStatus("error");
+        setError(
+          res.status === 429
+            ? "Demasiadas cotizaciones seguidas. Espera un momento."
+            : (body?.error ?? "No se pudo guardar la cotización."),
+        );
+        return;
+      }
+      setStatus("saved");
+    } catch {
       setStatus("error");
-      setError("No se pudo guardar la cotización. Inténtalo de nuevo.");
-      return;
+      setError("No se pudo guardar la cotización. Revisa tu conexión.");
     }
-    setStatus("saved");
   }
 
   if (!ctx.userId) {

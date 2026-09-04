@@ -102,7 +102,6 @@ export function Cotizador() {
               <div className="mt-5 border-t border-line-subtle pt-4">
                 <GuardarCotizacion
                   evento={evento}
-                  resultado={resultado}
                   narrativa={
                     racional.status === "done" ? (racional.narrativa ?? null) : null
                   }

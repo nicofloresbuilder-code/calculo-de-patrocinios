@@ -1,9 +1,16 @@
 import { NextResponse } from "next/server";
 import Anthropic from "@anthropic-ai/sdk";
 import { createClient } from "@/lib/supabase/server";
+import { supabaseConfigurado } from "@/lib/supabase/cookieOptions";
 import { AuthorizationError, requirePermission } from "@/lib/auth/session";
-import type { EventoInput } from "@/lib/types";
-import type { ComputePriceResult } from "@/lib/pricing";
+import { parseEventoInput } from "@/lib/validation/parseEvento";
+import {
+  LIMITES,
+  checkRateLimit,
+  identificarSolicitante,
+  rateLimitHeaders,
+} from "@/lib/rateLimit";
+import { computePrice } from "@/lib/pricing";
 
 export const runtime = "nodejs";
 
@@ -34,11 +41,6 @@ function extractJson(text: string): string {
   return candidate.slice(start, end + 1);
 }
 
-interface NarrativaBody {
-  evento: EventoInput;
-  precio: Pick<ComputePriceResult, "min" | "objetivo" | "max">;
-}
-
 interface Comparable {
   id: string;
   nombre: string;
@@ -57,8 +59,24 @@ export async function POST(request: Request) {
   // pago: sin esta comprobación, cualquiera con la URL puede gastar la cuota
   // de la API del proyecto. Que el botón esté escondido en el frontend no
   // impide un POST directo.
+  // Límite por IP ANTES de tocar la sesión: comprobar autenticación ya
+  // implica una llamada a Supabase, así que sin esto un anónimo podía
+  // inundar ese camino sin credenciales.
+  const rlIp = checkRateLimit(
+    `pre:${identificarSolicitante(request, null)}`,
+    LIMITES.preAuth.limite,
+    LIMITES.preAuth.ventanaMs,
+  );
+  if (!rlIp.permitido) {
+    return NextResponse.json(
+      { error: "Demasiadas solicitudes. Espera un momento." },
+      { status: 429, headers: rateLimitHeaders(rlIp) },
+    );
+  }
+
+  let ctx;
   try {
-    await requirePermission("quotes.create");
+    ctx = await requirePermission("quotes.create");
   } catch (err) {
     if (err instanceof AuthorizationError) {
       return NextResponse.json(
@@ -74,33 +92,65 @@ export async function POST(request: Request) {
     throw err;
   }
 
-  if (!process.env.ANTHROPIC_API_KEY) {
+  // Rate limit: este endpoint llama a un servicio de pago. Aun con sesión
+  // válida, un bucle quemaría la cuota de la API de Anthropic del proyecto.
+  const rl = checkRateLimit(
+    identificarSolicitante(request, ctx.userId),
+    LIMITES.narrativa.limite,
+    LIMITES.narrativa.ventanaMs,
+  );
+  if (!rl.permitido) {
     return NextResponse.json(
-      { error: "ANTHROPIC_API_KEY no está configurada en el servidor." },
+      { error: "Demasiadas solicitudes seguidas. Espera un momento." },
+      { status: 429, headers: rateLimitHeaders(rl) },
+    );
+  }
+
+  if (!process.env.ANTHROPIC_API_KEY) {
+    // Sin detalle de configuración al cliente: el nombre de la variable de
+    // entorno es información del servidor.
+    console.error("ANTHROPIC_API_KEY no está configurada en el servidor.");
+    return NextResponse.json(
+      { error: "El racional con IA no está disponible en este ambiente." },
       { status: 501 },
     );
   }
 
-  let body: NarrativaBody;
+  // El cuerpo llega sin garantías de forma: `unknown` hasta validarlo.
+  let body: unknown;
   try {
     body = await request.json();
   } catch {
     return NextResponse.json({ error: "JSON inválido." }, { status: 400 });
   }
 
-  const { evento, precio } = body;
-  if (!evento || !precio) {
-    return NextResponse.json({ error: "Faltan evento o precio." }, { status: 400 });
+  // Entrada no confiable: se valida y se normaliza antes de tocarla. Antes
+  // se asumía la forma por el tipo de TypeScript, que no existe en runtime.
+  const parsed = parseEventoInput((body as { evento?: unknown }).evento);
+  if (!parsed.ok) {
+    return NextResponse.json(
+      { error: "Las variables del evento no son válidas.", detalles: parsed.errores },
+      { status: 422 },
+    );
   }
+  const evento = parsed.evento;
+
+  // El precio NO se toma del cuerpo: se recalcula. Si se aceptara el del
+  // cliente, se podría hacer que la IA redacte un racional que justifique
+  // cualquier cifra inventada.
+  const p = computePrice(evento);
+  const precio = { min: p.min, objetivo: p.objetivo, max: p.max };
 
   // Comparables desde Supabase (lectura pública, RLS permite select sin auth).
   // Si Supabase todavía no está conectado (Commit 2 pendiente), seguimos sin
   // comparables en vez de tronar la narrativa completa.
   let comparables: Comparable[] = [];
-  if (process.env.NEXT_PUBLIC_SUPABASE_URL) {
+  if (supabaseConfigurado()) {
     try {
       const supabase = await createClient();
-      const { data } = await supabase.from("comparables").select("*").limit(3);
+      const { data } = await supabase.from("comparables")
+        .select("id, nombre, marca, monto_mxn, aforo, dias, lineup, exclusiva, activacion, ciudad_tier")
+        .limit(3);
       comparables = data ?? [];
     } catch {
       comparables = [];

@@ -91,6 +91,22 @@ npm test
 7. **Nunca hard delete de usuarios.** La baja es `status` (`INACTIVE` /
    `SUSPENDED`), para conservar historial y no dejar cotizaciones huérfanas.
 
+## Entrada del cliente
+
+Todo cuerpo de petición es **no confiable**, aunque TypeScript diga otra cosa:
+los tipos se borran al compilar.
+
+1. Pasa el cuerpo por `parseEventoInput()` (o un parser equivalente con
+   **allowlist explícita de campos**) antes de tocarlo. Construye un objeto
+   nuevo; nunca hagas spread de lo que llegó.
+2. **Nunca aceptes del cliente un valor que el servidor puede calcular.** El
+   precio se recalcula con `computePrice()`; `user_id` sale de la sesión.
+3. Rate limit en todo endpoint nuevo: `checkRateLimit()` con un presupuesto
+   declarado en `LIMITES`, y el límite pre-auth por IP ANTES de comprobar la
+   sesión (comprobarla ya cuesta una llamada a Supabase).
+
+Ver `SECURITY-AUDIT.md`, controles #8 y #14, para por qué.
+
 ## Errores al usuario
 
 `console.error` para el detalle técnico, mensaje de producto para la persona.

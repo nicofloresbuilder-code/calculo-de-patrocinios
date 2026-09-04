@@ -14,6 +14,7 @@ import {
 } from "@/components/ui";
 import { formatMXN } from "@/lib/format";
 import { createClient } from "@/lib/supabase/server";
+import { supabaseConfigurado } from "@/lib/supabase/cookieOptions";
 import { getAuthzContext } from "@/lib/auth/session";
 import { can } from "@/lib/auth/can";
 
@@ -50,7 +51,7 @@ export default async function CotizacionesPage() {
   // saltarse el chequeo escribiendo la URL.
   const ctx = await getAuthzContext();
 
-  if (!process.env.NEXT_PUBLIC_SUPABASE_URL) {
+  if (!supabaseConfigurado()) {
     return (
       <PageFrame>
         <Alert tone="warning" title="Supabase no está conectado en este ambiente">

@@ -7,7 +7,7 @@ import {
   TERRITORIO_MAX,
   TERRITORIO_MIN,
   type EventoInput,
-} from "./types";
+} from "./types.ts";
 
 export type EventoErrors = Partial<Record<keyof EventoInput, string>>;
 

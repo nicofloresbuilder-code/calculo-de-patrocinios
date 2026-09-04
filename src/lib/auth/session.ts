@@ -2,12 +2,10 @@ import "server-only";
 
 import { cache } from "react";
 import { createClient } from "@/lib/supabase/server";
-import {
-  permissionsForRole,
-  type Permission,
-  type RoleName,
-} from "./permissions";
+import { supabaseConfigurado } from "@/lib/supabase/cookieOptions";
+import type { Permission, RoleName, UserStatus } from "./permissions";
 import { ANONYMOUS, can, type AuthzContext } from "./can";
+import { resolveAuthzContext } from "./resolveContext";
 
 /**
  * DATA ACCESS LAYER (DAL) — el único lugar del servidor que resuelve
@@ -65,10 +63,9 @@ const DEFAULT_ROLE: RoleName = "COMMERCIAL";
  * cambia.
  */
 export const getAuthzContext = cache(async (): Promise<AuthzContext> => {
-  // Sin proyecto de Supabase configurado no hay sesión posible. Se devuelve
-  // anónimo en vez de reventar — es el mismo guard que ya tenía la app, pero
-  // ahora en un solo lugar.
-  if (!process.env.NEXT_PUBLIC_SUPABASE_URL) return ANONYMOUS;
+  // Sin Supabase configurado por completo no hay sesión posible. Se devuelve
+  // anónimo en vez de reventar: fallar cerrado, no caído.
+  if (!supabaseConfigurado()) return ANONYMOUS;
 
   let user: { id: string; email?: string; user_metadata?: Record<string, unknown> } | null =
     null;
@@ -96,13 +93,20 @@ export const getAuthzContext = cache(async (): Promise<AuthzContext> => {
         ? meta.name
         : null;
 
-  return {
+  // Sin la tabla `perfiles` no hay estado que consultar todavía; un usuario
+  // autenticado por Supabase se trata como ACTIVE. Cuando la migración
+  // 0004_rbac.sql esté aplicada, `status` y `role` salen de `perfiles` y
+  // `resolveAuthzContext` corta el acceso de las cuentas desactivadas en
+  // cada petición, sin que cambie nada más.
+  const status: UserStatus = "ACTIVE";
+
+  return resolveAuthzContext({
     userId: user.id,
     email: user.email ?? null,
-    displayName: fullName ?? user.email ?? null,
+    displayName: fullName,
     role,
-    permissions: permissionsForRole(role),
-  };
+    status,
+  });
 });
 
 /** Error de autorización con el status HTTP que le corresponde. */
