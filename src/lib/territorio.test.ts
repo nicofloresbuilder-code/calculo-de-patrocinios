@@ -173,12 +173,16 @@ test("ANCLA FUERTE: Ultra México (deal real) sigue cuadrando", () => {
  * misma gente 5 veces y encima premiando por durar más. Por eso Goleiro
  * sale sobrestimado.
  *
- * El arreglo no es un coeficiente sino estructural: el driver debería ser
- * la DENSIDAD (asistentes/día), no el total × duración. No se aplicó aún
- * porque falta confirmar si el "15,000" del Grupo A también es total (si
- * fuera por día, todo el análisis cambia). Ver DECISIONS.md.
+ * DESENLACE: Nicolás descartó el modelo de densidad (durar más SÍ vale
+ * más, porque al patrocinador le cuesta más operar la activación) y bajó
+ * el premio de 15% a 5% por día. Con eso, Goleiro sigue muy por encima de
+ * su precio de cierre — y confirmó que la explicación no es la fórmula
+ * sino el deal: **se cerró por debajo de su valor**.
+ *
+ * Goleiro queda FUERA como ancla de calibración. Calibrar contra él
+ * habría metido ese descuento a todas las cotizaciones futuras.
  */
-test("PENDIENTE ESTRUCTURAL: Goleiro sobrestima por doble conteo de gente", () => {
+test("Goleiro: subvaluado, ya no es ancla de calibración", () => {
   const { objetivo } = computePrice({
     activacion: "oficial",
     aforo: 15000,
@@ -190,6 +194,6 @@ test("PENDIENTE ESTRUCTURAL: Goleiro sobrestima por doble conteo de gente", () =
   });
   assert.ok(
     objetivo > 1_000_000 * 1.5,
-    "si Goleiro dejó de sobrestimar, ya se cambió el driver a densidad — actualiza este test",
+    "si esto baja, alguien está recalibrando contra un deal marcado como subvaluado",
   );
 });

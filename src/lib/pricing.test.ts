@@ -77,11 +77,29 @@ test("pase mecánico: Match Cup mejora tras subir el piso de aforo (antes -64%, 
   assert.ok(desvio >= -0.2, `objetivo=${result.objetivo}, desvío=${(desvio * 100).toFixed(1)}%`);
 });
 
-test("pase mecánico: Goleiro/Michelob sigue sobrestimado — pendiente, no oculto", () => {
+/**
+ * GOLEIRO YA NO ES UN ANCLA DE CALIBRACIÓN — decisión de Nicolás
+ * (2026-08-30).
+ *
+ * Durante dos sesiones se persiguió su desvío como si fuera un error de la
+ * fórmula. Con los datos completos (15,000 asistentes en total en 5 días,
+ * territorio 10x10) el modelo lo valúa en ~$2.3M contra el $1M en que
+ * cerró. Se le plantearon las dos explicaciones posibles —que el deal se
+ * cerró por debajo de su valor, o que los eventos tipo FanFest valgan
+ * menos que un festival del mismo aforo— y Nicolás confirmó la primera:
+ * fue un mal deal, y de aquí en adelante no se dan esos descuentos.
+ *
+ * O sea que aquí la fórmula NO está fallando: está diciendo que ese
+ * patrocinio se vendió a la mitad de lo que valía. Calibrar contra él
+ * habría metido ese descuento a todas las cotizaciones futuras.
+ *
+ * Se conserva el test como registro de esa lectura, no como pendiente.
+ */
+test("Goleiro: el modelo lo valúa MUY por encima de lo que se cerró (deal subvaluado)", () => {
   const result = computePrice(GOLEIRO);
   const desvio = (result.objetivo - 1_000_000) / 1_000_000;
-  // Documentamos el desvío real en vez de forzar un rango que lo esconda.
-  // DECISIONS.md explica por qué no se tocó en este pase (aforo=15,000 no
-  // cae en el clamp que sí se corrigió) y qué se investigaría después.
-  assert.ok(desvio > 0.3, `objetivo=${result.objetivo}, desvío=${(desvio * 100).toFixed(1)}% (se esperaba sobrestimado)`);
+  assert.ok(
+    desvio > 0.3,
+    `objetivo=${result.objetivo}, desvío=${(desvio * 100).toFixed(1)}% — si esto baja, alguien recalibró contra un deal que Nicolás marcó como subvaluado`,
+  );
 });

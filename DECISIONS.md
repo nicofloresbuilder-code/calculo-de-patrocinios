@@ -300,3 +300,42 @@ Se aplicó `DURACION_PREMIO_POR_DIA = 0.05`.
 ### Piso de precio: identificado, no implementado
 
 Se detectó evidencia de un piso (~$300K): Match Cup **sin** exclusividad y B1 **con** exclusividad cuestan lo mismo, $300,000 — el factor de 1.25 no mueve nada porque ambos están pegados al mínimo. Nicolás confirmó que existe pero que **"podríamos bajar el piso a mucho menos, dependiendo mucho del evento"**, y pidió dejarlo así por ahora. No se implementó. Queda como el pendiente que explicaría el −16% de Match Cup.
+
+### Goleiro sale como ancla de calibración (decisión de Nicolás)
+
+Se le plantearon las dos explicaciones posibles del desvío de Goleiro —que el deal se cerró por debajo de su valor, o que los eventos tipo FanFest valgan menos que un festival del mismo aforo— y confirmó la primera: **fue un mal deal, y de aquí en adelante no se dan esos descuentos.**
+
+Eso cambia la lectura por completo. Durante dos sesiones se persiguió ese +65%/+128% como si fuera un error de la fórmula. **No lo era:** el modelo estaba diciendo que ese patrocinio se vendió a la mitad de lo que valía (~$2.3M contra el $1M en que cerró). Seguir calibrando contra él habría metido ese descuento a todas las cotizaciones futuras — justo lo contrario de lo que la herramienta existe para hacer.
+
+Goleiro queda documentado en los tests como **deal subvaluado**, no como pendiente. Los tests ahora truenan si alguien recalibra contra él.
+
+**Calibración vigente — 7 de 8 anclas dentro del 10%** (ya sin Goleiro):
+
+| Caso | Evidencia | Desvío |
+|---|---|---|
+| A1–A4 (territorio) | cotizado | ±1% |
+| B1 | cotizado | +5.0% |
+| B2 naming | revisado | +0.0% |
+| Ultra México | **deal real** | −9.0% |
+| Match Cup | **deal real** | −16.0% |
+
+Los dos que faltan tienen causa conocida: Ultra puede estar pidiendo un premio por día mayor al 5% para eventos largos (o tuvo territorio >5×5, sin confirmar), y Match Cup es el caso del piso de precio que Nicolás pidió dejar pendiente.
+
+### HALLAZGO: el proyecto de Supabase de Aforo ya no existe
+
+Al ir a revisar si Goleiro seguía en la tabla `comparables` (preocupación válida: la IA lo citaría como referencia para justificar precios bajos), el host **no resuelve**:
+
+```
+ietahcthuejmgjlmgsub.supabase.co  ->  NXDOMAIN
+btockirecdxmkuztokwr.supabase.co  ->  resuelve OK   (el de Cotejo, como control)
+```
+
+El proyecto está pausado o borrado — Supabase suspende los proyectos del plan gratuito por inactividad, y este lleva ~15 días sin uso.
+
+**Consecuencias, todas silenciosas hasta ahora:**
+
+1. **La narrativa corre sin comparables.** El `try/catch` de `route.ts` deja `comparables = []` cuando la consulta falla, así que la IA genera el racional sin ninguna referencia histórica y nadie se entera. Se confirma en la prueba de producción de hoy: `comparables_relevantes_ids: []`.
+2. **Guardar cotización fallaría** de todos modos, aparte del pendiente de Google OAuth.
+3. La migración `0002_territorio_producto.sql` no se puede correr hasta reactivar el proyecto.
+
+El lado bueno: la preocupación de que Goleiro contaminara las cotizaciones vía comparables **no aplica hoy**, porque no está llegando ningún comparable. Cuando se reactive el proyecto, hay que revisar ese registro antes de que la IA lo empiece a citar.
