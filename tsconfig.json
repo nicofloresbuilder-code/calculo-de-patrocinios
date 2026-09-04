@@ -10,6 +10,13 @@
     "module": "esnext",
     "moduleResolution": "bundler",
     "resolveJsonModule": true,
+    // Permite `import "./modulo.ts"` en imports con valor en tiempo de
+    // ejecución. Lo necesita la suite de tests, que corre con el runner
+    // nativo de Node (`--experimental-strip-types`) y no con un bundler:
+    // sin extensión, el resolvedor de ESM no encuentra el archivo. Turbopack
+    // y tsc lo aceptan igual, y `noEmit` ya está activo (requisito de la
+    // opción).
+    "allowImportingTsExtensions": true,
     "isolatedModules": true,
     "jsx": "react-jsx",
     "incremental": true,

@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import Anthropic from "@anthropic-ai/sdk";
 import { createClient } from "@/lib/supabase/server";
+import { AuthorizationError, requirePermission } from "@/lib/auth/session";
 import type { EventoInput } from "@/lib/types";
 import type { ComputePriceResult } from "@/lib/pricing";
 
@@ -52,6 +53,27 @@ interface Comparable {
 }
 
 export async function POST(request: Request) {
+  // Autorización del lado del servidor. Este endpoint llama a un servicio de
+  // pago: sin esta comprobación, cualquiera con la URL puede gastar la cuota
+  // de la API del proyecto. Que el botón esté escondido en el frontend no
+  // impide un POST directo.
+  try {
+    await requirePermission("quotes.create");
+  } catch (err) {
+    if (err instanceof AuthorizationError) {
+      return NextResponse.json(
+        {
+          error:
+            err.status === 401
+              ? "Inicia sesión para generar el racional."
+              : "Tu rol no permite generar el racional.",
+        },
+        { status: err.status },
+      );
+    }
+    throw err;
+  }
+
   if (!process.env.ANTHROPIC_API_KEY) {
     return NextResponse.json(
       { error: "ANTHROPIC_API_KEY no está configurada en el servidor." },

@@ -1,36 +1,82 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# Aforo
 
-## Getting Started
+Plataforma interna de pricing de patrocinios para eventos en vivo en México.
+Un ejecutivo comercial mete las variables de un evento (aforo, duración,
+calibre del line-up, exclusividad, tipo de activación, ciudad, territorio de
+la activación) y la plataforma devuelve un rango de precio defendible —
+mínimo, objetivo de cierre y máximo — con el desglose de cuánto pesa cada
+variable.
 
-First, run the development server:
+**El precio nunca lo decide el modelo de lenguaje.** Sale de una fórmula
+determinista calibrada contra deals reales; el LLM solo explica el racional y
+rankea comparables históricos.
+
+## Stack
+
+| Capa | Tecnología |
+|---|---|
+| Framework | Next.js 16 (App Router, Turbopack) · React 19 |
+| Estilos | Tailwind CSS v4 (`@theme inline`, sin `tailwind.config.js`) |
+| Base de datos | Supabase (Postgres) con Row Level Security |
+| Autenticación | Supabase Auth |
+| Autorización | RBAC propio — ver `RBAC-ARCHITECTURE.md` |
+| LLM | Anthropic API, solo desde el servidor |
+| Hosting | Vercel |
+| Paquetes | npm |
+
+## Empezar
 
 ```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
+npm install
+cp .env.example .env.local   # y llenar los valores
+npm run dev                  # http://localhost:3000
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+Sin variables de Supabase la app arranca igual: el cotizador funciona
+completo (el cálculo es local), y quedan deshabilitados el guardado, el
+listado de cotizaciones y el racional con IA.
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+## Comandos
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+```bash
+npm run dev      # servidor de desarrollo
+npm run build    # build de producción
+npm run lint     # ESLint
+npm test         # tests de dominio y de autorización (node --test)
+npx tsc --noEmit # typecheck
+```
 
-## Learn More
+## Documentación
 
-To learn more about Next.js, take a look at the following resources:
+| Archivo | Qué contiene |
+|---|---|
+| `DESIGN-SYSTEM.md` | Tokens, primitivas, reglas de uso, contrastes verificados |
+| `PRODUCT-UI-AUDIT.md` | Auditoría de UX/UI/frontend/accesibilidad y prioridades |
+| `RBAC-ARCHITECTURE.md` | Modelo de usuarios, roles y permisos; capas de seguridad |
+| `DECISIONS.md` | Bitácora de decisiones: por qué cada número de la fórmula es el que es |
+| `docs/PACKET.md` | El problema, el usuario y el benchmark |
+| `.claude/skills/` | Guías de trabajo para agentes de código en este repo |
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+## Base de datos
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+Migraciones en `supabase/migrations/`, se corren en orden en el SQL Editor de
+Supabase. `0004_rbac.sql` está **escrita pero no aplicada** — ver
+`RBAC-ARCHITECTURE.md` §6.
 
-## Deploy on Vercel
+## Estructura
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
-
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+```
+src/
+├── app/                  rutas (App Router)
+├── components/
+│   ├── ui/               design system — primitivas
+│   ├── shell/            app shell: sidebar, topbar, page header
+│   ├── auth/             <Can>, usePermissions()
+│   └── *.tsx             componentes del cotizador
+├── lib/
+│   ├── auth/             catálogo de permisos, can(), DAL de sesión
+│   ├── supabase/         clientes de servidor y de navegador
+│   ├── navigation.ts     registro de módulos con sus permisos
+│   └── pricing.ts        motor de precio determinista (NO TOCAR sin leer DECISIONS.md)
+└── proxy.ts              refresco de sesión (en Next 16 el middleware se llama Proxy)
+```

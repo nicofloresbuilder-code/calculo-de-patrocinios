@@ -1,7 +1,7 @@
 "use client";
 
-import { useState } from "react";
-import { Panel } from "./Panel";
+import { useRef, useState } from "react";
+import { Card, EmptyState } from "@/components/ui";
 import { EventoForm } from "./EventoForm";
 import { RangoBar } from "./RangoBar";
 import { DesglosePanel } from "./DesglosePanel";
@@ -15,12 +15,27 @@ export function Cotizador() {
   const [evento, setEvento] = useState<EventoInput | null>(null);
   const [resultado, setResultado] = useState<ComputePriceResult | null>(null);
   const [racional, setRacional] = useState<RacionalState>({ status: "idle" });
+  const resultadosRef = useRef<HTMLDivElement>(null);
 
   async function handleSubmit(nuevoEvento: EventoInput) {
     setEvento(nuevoEvento);
     const precio = computePrice(nuevoEvento);
     setResultado(precio);
     setRacional({ status: "loading" });
+
+    // En una columna (móvil/tablet) el resultado queda debajo de todo el
+    // formulario: sin esto, el usuario calcula y en pantalla no pasa nada.
+    // En escritorio el resultado ya está a la vista y no se hace nada.
+    if (window.matchMedia("(max-width: 767px)").matches) {
+      requestAnimationFrame(() => {
+        resultadosRef.current?.scrollIntoView({
+          behavior: window.matchMedia("(prefers-reduced-motion: reduce)").matches
+            ? "auto"
+            : "smooth",
+          block: "start",
+        });
+      });
+    }
 
     try {
       const res = await fetch("/api/narrativa", {
@@ -55,67 +70,68 @@ export function Cotizador() {
     }
   }
 
+  const calculado = resultado !== null && evento !== null;
+
   return (
-    <main className="mx-auto grid w-full max-w-7xl flex-1 grid-cols-1 gap-6 px-6 py-8 sm:px-10 lg:grid-cols-[340px_1fr]">
-      {/* Columna izquierda: variables del evento */}
-      <Panel title="Variables del evento" className="h-fit">
+    <div className="grid grid-cols-1 items-start gap-4 md:grid-cols-[300px_minmax(0,1fr)] lg:grid-cols-[320px_minmax(0,1fr)]">
+      {/* Entradas — se quedan a la vista mientras se leen los resultados */}
+      <Card title="Variables del evento" className="md:sticky md:top-[4.5rem]">
         <EventoForm onSubmit={handleSubmit} />
-      </Panel>
+      </Card>
 
-      {/* Columna derecha: resultado */}
-      <div className="flex flex-col gap-6">
-        <Panel>
-          {resultado && evento ? (
-            <div className="space-y-4">
-              <RangoBar min={resultado.min} objetivo={resultado.objetivo} max={resultado.max} />
-              <GuardarCotizacion
-                evento={evento}
-                resultado={resultado}
-                narrativa={racional.status === "done" ? (racional.narrativa ?? null) : null}
-              />
-            </div>
-          ) : (
-            <>
-              <p className="mb-4 text-xs font-semibold uppercase tracking-widest text-aforo-fg-muted">
-                Rango sugerido
-              </p>
-              <p className="text-sm text-aforo-fg-muted">
-                Llena las variables del evento y presiona &ldquo;Calcular rango
-                sugerido&rdquo; para ver el rango de precio, el objetivo de cierre
-                y el desglose por variable.
-              </p>
-            </>
-          )}
-        </Panel>
-
-        {resultado && evento?.paga_con_producto && evento.monto_producto > 0 && (
-          <Panel title="Pago en especie · ¿se puede hacer líquido?">
-            <ProductoPanel
-              montoEnProducto={evento.monto_producto}
-              montoEfectivo={Math.max(0, resultado.objetivo - evento.monto_producto)}
-              aforo={evento.aforo}
-              dias={evento.dias}
+      {/* Resultados. `scroll-mt` deja aire para la barra superior fija. */}
+      <div ref={resultadosRef} className="flex scroll-mt-20 flex-col gap-4">
+        {!calculado ? (
+          // Antes esta columna eran tres cajas con texto explicativo que
+          // ocupaban dos tercios de la pantalla sin decir nada accionable.
+          <Card>
+            <EmptyState
+              icon="calculator"
+              title="Sin cotización todavía"
+              description="Llena las variables del evento y calcula el rango. Vas a ver el precio mínimo, el objetivo de cierre y cuánto pesa cada variable en ese número."
             />
-          </Panel>
-        )}
+          </Card>
+        ) : (
+          <>
+            <Card raised>
+              <RangoBar
+                min={resultado.min}
+                objetivo={resultado.objetivo}
+                max={resultado.max}
+              />
+              <div className="mt-5 border-t border-line-subtle pt-4">
+                <GuardarCotizacion
+                  evento={evento}
+                  resultado={resultado}
+                  narrativa={
+                    racional.status === "done" ? (racional.narrativa ?? null) : null
+                  }
+                />
+              </div>
+            </Card>
 
-        <div className="grid grid-cols-1 gap-6 md:grid-cols-[2fr_1fr]">
-          <Panel title="Desglose por variable">
-            {resultado ? (
-              <DesglosePanel desglose={resultado.desglose} />
-            ) : (
-              <p className="text-sm text-aforo-fg-muted">
-                Aquí aparecerán las barras de aforo, line-up, exclusividad,
-                duración y ciudad una vez calculado el rango.
-              </p>
+            {evento.paga_con_producto && evento.monto_producto > 0 && (
+              <Card title="Pago en especie · ¿se puede hacer líquido?">
+                <ProductoPanel
+                  montoEnProducto={evento.monto_producto}
+                  montoEfectivo={Math.max(0, resultado.objetivo - evento.monto_producto)}
+                  aforo={evento.aforo}
+                  dias={evento.dias}
+                />
+              </Card>
             )}
-          </Panel>
 
-          <Panel title="Por qué este rango">
-            <RacionalPanel state={racional} />
-          </Panel>
-        </div>
+            <div className="grid grid-cols-1 items-start gap-4 xl:grid-cols-[minmax(0,3fr)_minmax(0,2fr)]">
+              <Card title="Desglose por variable">
+                <DesglosePanel desglose={resultado.desglose} />
+              </Card>
+              <Card title="Por qué este rango">
+                <RacionalPanel state={racional} />
+              </Card>
+            </div>
+          </>
+        )}
       </div>
-    </main>
+    </div>
   );
 }
