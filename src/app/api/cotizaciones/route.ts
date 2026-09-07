@@ -135,6 +135,10 @@ export async function POST(request: Request) {
     .from("cotizaciones")
     .insert({
       user_id: ctx.userId,
+      // Datos comerciales. No entran en computePrice() — el precio no cambia
+      // por escribirlos; sirven para saber a quién se le mandó y buscarlo.
+      marca: evento.marca,
+      contacto: evento.contacto || null,
       nombre_evento: evento.nombre_evento,
       aforo: evento.aforo,
       dias: evento.dias,

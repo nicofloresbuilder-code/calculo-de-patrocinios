@@ -1,9 +1,11 @@
 import {
   ACTIVACION_OPTIONS,
   AFORO_MAX,
+  CONTACTO_MAX,
   CIUDAD_TIER_OPTIONS,
   DIAS_MAX,
   LINEUP_OPTIONS,
+  MARCA_MAX,
   TERRITORIO_MAX,
   TERRITORIO_MIN,
   type EventoInput,
@@ -26,6 +28,19 @@ function isPositiveInt(v: number) {
  */
 export function validateEvento(input: EventoInput): EventoErrors {
   const errors: EventoErrors = {};
+
+  // La marca es obligatoria: una cotización guardada sin destinatario no se
+  // puede buscar ni auditar después. El contacto es opcional a propósito —
+  // muchas veces se cotiza antes de saber con quién se va a tratar.
+  if (!input.marca.trim()) {
+    errors.marca = "Indica a qué marca se le cotiza.";
+  } else if (input.marca.trim().length > MARCA_MAX) {
+    errors.marca = `Máximo ${MARCA_MAX} caracteres.`;
+  }
+
+  if (input.contacto.trim().length > CONTACTO_MAX) {
+    errors.contacto = `Máximo ${CONTACTO_MAX} caracteres.`;
+  }
 
   if (!input.nombre_evento.trim()) {
     errors.nombre_evento = "El nombre del evento es requerido.";

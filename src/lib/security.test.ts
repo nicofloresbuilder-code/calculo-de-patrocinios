@@ -136,6 +136,8 @@ test("asignar roles exige users.assign_role, que ningún rol no-admin tiene", ()
 // ═══════════════════════════════════════════════════════════════════════
 
 const EVENTO_VALIDO = {
+  marca: "Marca de prueba",
+  contacto: "Contacto de prueba",
   nombre_evento: "Evento de prueba",
   aforo: 15000,
   dias: 2,
@@ -292,4 +294,56 @@ test("toda ruta /admin declara permisos: ninguna queda pública por olvido", () 
       );
     }
   }
+});
+
+// ═══════════════════════════════════════════════════════════════════════
+// Escenario: los datos comerciales NO son variables de precio
+// ═══════════════════════════════════════════════════════════════════════
+
+test("marca y contacto no mueven el precio", () => {
+  // El motor está calibrado contra deals reales (DECISIONS.md). Si algún día
+  // alguien mete `marca` en la fórmula, el precio dejaría de depender solo
+  // de las variables del evento y toda la calibración quedaría inválida.
+  // Este test lo impide.
+  const base = parseEventoInput(EVENTO_VALIDO);
+  assert.ok(base.ok);
+  if (!base.ok) return;
+  const precioBase = computePrice(base.evento);
+
+  for (const variante of [
+    { marca: "Otra Marca S.A. de C.V." },
+    { contacto: "Otra Persona" },
+    { marca: "", contacto: "" },
+    { marca: "X".repeat(100), contacto: "Y".repeat(100) },
+  ]) {
+    const r = parseEventoInput({ ...EVENTO_VALIDO, ...variante });
+    // La marca vacía no debe pasar validación, pero eso no es lo que se
+    // prueba aquí: si pasa, el precio tiene que ser idéntico.
+    if (!r.ok) continue;
+    const precio = computePrice(r.evento);
+    assert.equal(
+      precio.objetivo,
+      precioBase.objetivo,
+      `El precio cambió con ${JSON.stringify(variante)}`,
+    );
+    assert.deepEqual(precio.desglose, precioBase.desglose);
+  }
+});
+
+test("la marca es obligatoria y el contacto opcional", () => {
+  assert.equal(parseEventoInput({ ...EVENTO_VALIDO, marca: "" }).ok, false);
+  assert.equal(parseEventoInput({ ...EVENTO_VALIDO, marca: "   " }).ok, false);
+  assert.equal(parseEventoInput({ ...EVENTO_VALIDO, contacto: "" }).ok, true);
+
+  const sinContacto = parseEventoInput({ ...EVENTO_VALIDO, contacto: undefined });
+  assert.ok(sinContacto.ok, "un contacto ausente no debe invalidar la cotización");
+});
+
+test("marca y contacto se recortan y acotan como todo texto del cliente", () => {
+  const r = parseEventoInput({ ...EVENTO_VALIDO, marca: "  Sprite  ", contacto: "  Ana  " });
+  assert.ok(r.ok);
+  if (!r.ok) return;
+  assert.equal(r.evento.marca, "Sprite");
+  assert.equal(r.evento.contacto, "Ana");
+  assert.equal(parseEventoInput({ ...EVENTO_VALIDO, marca: "M".repeat(500) }).ok, false);
 });

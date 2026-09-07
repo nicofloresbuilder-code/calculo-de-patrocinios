@@ -13,6 +13,8 @@ import {
   LinkButton,
 } from "@/components/ui";
 import { formatMXN } from "@/lib/format";
+import { ACTIVACION_OPTIONS } from "@/lib/types";
+import { CotizacionesFiltros } from "@/components/CotizacionesFiltros";
 import { createClient } from "@/lib/supabase/server";
 import { supabaseConfigurado } from "@/lib/supabase/cookieOptions";
 import { getAuthzContext } from "@/lib/auth/session";
@@ -22,6 +24,8 @@ export const metadata = { title: "Cotizaciones" };
 
 interface CotizacionRow {
   id: string;
+  marca: string | null;
+  contacto: string | null;
   nombre_evento: string;
   activacion: string | null;
   aforo: number | null;
@@ -45,7 +49,41 @@ const dateFmt = new Intl.DateTimeFormat("es-MX", {
 });
 const numberFmt = new Intl.NumberFormat("es-MX");
 
-export default async function CotizacionesPage() {
+/** Escapa los comodines de PostgREST para que la búsqueda sea literal. */
+function patronBusqueda(termino: string): string {
+  return `%${termino.replace(/[%_,()]/g, "")}%`;
+}
+
+const ORDENES = {
+  recientes: { columna: "creado_en", asc: false },
+  antiguas: { columna: "creado_en", asc: true },
+  mayor: { columna: "precio_objetivo", asc: false },
+  menor: { columna: "precio_objetivo", asc: true },
+} as const;
+
+type OrdenKey = keyof typeof ORDENES;
+
+export default async function CotizacionesPage({
+  searchParams,
+}: {
+  searchParams: Promise<Record<string, string | string[] | undefined>>;
+}) {
+  const sp = await searchParams;
+  const soloTexto = (v: string | string[] | undefined) =>
+    typeof v === "string" ? v.trim() : "";
+
+  const q = soloTexto(sp.q).slice(0, 120);
+  // El filtro se valida contra el catálogo: un valor arbitrario en la URL no
+  // debe llegar a la consulta.
+  const activacionParam = soloTexto(sp.activacion);
+  const activacion = ACTIVACION_OPTIONS.some((o) => o.value === activacionParam)
+    ? activacionParam
+    : "";
+  const ordenParam = soloTexto(sp.orden);
+  const orden: OrdenKey = (
+    ordenParam in ORDENES ? ordenParam : "recientes"
+  ) as OrdenKey;
+
   // Autorización del lado del servidor. Que la barra lateral esconda este
   // módulo no basta: la ruta se comprueba aquí, donde el usuario no puede
   // saltarse el chequeo escribiendo la URL.
@@ -88,12 +126,25 @@ export default async function CotizacionesPage() {
 
   const supabase = await createClient();
   // RLS ("usuario ve solo sus cotizaciones") ya filtra por auth.uid() = user_id.
-  const { data: cotizaciones, error } = await supabase
+  // El filtrado ocurre en la base, no sobre un arreglo ya traído: con
+  // cientos de cotizaciones, filtrar en el cliente sería traerlas todas.
+  let consulta = supabase
     .from("cotizaciones")
     .select(
-      "id, nombre_evento, activacion, aforo, precio_min, precio_objetivo, precio_max, creado_en",
-    )
-    .order("creado_en", { ascending: false })
+      "id, marca, contacto, nombre_evento, activacion, aforo, precio_min, precio_objetivo, precio_max, creado_en",
+    );
+
+  if (q) {
+    const patron = patronBusqueda(q);
+    consulta = consulta.or(
+      `marca.ilike.${patron},contacto.ilike.${patron},nombre_evento.ilike.${patron}`,
+    );
+  }
+  if (activacion) consulta = consulta.eq("activacion", activacion);
+
+  const { columna, asc } = ORDENES[orden];
+  const { data: cotizaciones, error } = await consulta
+    .order(columna, { ascending: asc, nullsFirst: false })
     .returns<CotizacionRow[]>();
 
   if (error) {
@@ -107,30 +158,51 @@ export default async function CotizacionesPage() {
     );
   }
 
-  if (!cotizaciones || cotizaciones.length === 0) {
+  const hayFiltros = Boolean(q || activacion);
+  const filas = cotizaciones ?? [];
+
+  if (filas.length === 0) {
+    // Dos estados vacíos distintos: "no hay nada" pide crear la primera
+    // cotización; "no hay resultados" pide cambiar la búsqueda. Ofrecer
+    // "Ir al cotizador" a quien solo buscó mal sería inútil.
     return (
-      <PageFrame>
+      <PageFrame count={0} mostrarFiltros={hayFiltros}>
         <Card>
-          <EmptyState
-            title="Todavía no has guardado ninguna cotización"
-            description="Calcula un rango en el cotizador y guárdalo para tenerlo aquí."
-            action={
-              <LinkButton href="/" variant="primary" size="sm">
-                Ir al cotizador
-              </LinkButton>
-            }
-          />
+          {hayFiltros ? (
+            <EmptyState
+              icon="search"
+              title="Ninguna cotización coincide con la búsqueda"
+              description="Prueba con otro término o quita los filtros."
+              action={
+                <LinkButton href="/cotizaciones" variant="secondary" size="sm">
+                  Quitar filtros
+                </LinkButton>
+              }
+            />
+          ) : (
+            <EmptyState
+              title="Todavía no has guardado ninguna cotización"
+              description="Calcula un rango en el cotizador y guárdalo para tenerlo aquí."
+              action={
+                <LinkButton href="/" variant="primary" size="sm">
+                  Ir al cotizador
+                </LinkButton>
+              }
+            />
+          )}
         </Card>
       </PageFrame>
     );
   }
 
   return (
-    <PageFrame count={cotizaciones.length}>
+    <PageFrame count={filas.length} mostrarFiltros>
       <Card flush>
         <Table>
           <THead>
             <TR>
+              <TH>Marca</TH>
+              <TH>Contacto</TH>
               <TH>Evento</TH>
               <TH>Activación</TH>
               <TH numeric>Aforo</TH>
@@ -140,9 +212,15 @@ export default async function CotizacionesPage() {
             </TR>
           </THead>
           <TBody>
-            {cotizaciones.map((c) => (
+            {filas.map((c) => (
               <TR key={c.id} interactive>
-                <TD className="font-medium">{c.nombre_evento}</TD>
+                <TD className="font-medium">
+                  {c.marca ?? <span className="text-fg-subtle">—</span>}
+                </TD>
+                <TD className="text-fg-muted">
+                  {c.contacto ?? <span className="text-fg-subtle">—</span>}
+                </TD>
+                <TD>{c.nombre_evento}</TD>
                 <TD>
                   {c.activacion ? (
                     <Badge tone="neutral">
@@ -177,9 +255,11 @@ export default async function CotizacionesPage() {
 
 function PageFrame({
   count,
+  mostrarFiltros = false,
   children,
 }: {
   count?: number;
+  mostrarFiltros?: boolean;
   children: React.ReactNode;
 }) {
   return (
@@ -198,7 +278,10 @@ function PageFrame({
           </LinkButton>
         }
       />
-      <PageBody>{children}</PageBody>
+      <PageBody>
+        {mostrarFiltros && <CotizacionesFiltros total={count ?? 0} />}
+        {children}
+      </PageBody>
     </>
   );
 }

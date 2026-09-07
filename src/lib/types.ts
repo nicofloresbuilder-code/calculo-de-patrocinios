@@ -4,6 +4,15 @@ export type CiudadTier = "tier1" | "tier2" | "tier3";
 
 /** Variables de un evento — mismas llaves que la tabla `cotizaciones` en Supabase. */
 export interface EventoInput {
+  /**
+   * Marca a la que se le cotiza. Es DATO COMERCIAL, no variable de precio:
+   * `computePrice()` no la recibe y el número no cambia por escribirla.
+   * Se pide porque una cotización guardada sin destinatario no sirve para
+   * buscarla después.
+   */
+  marca: string;
+  /** Persona de contacto en la marca. Opcional: no siempre se conoce todavía. */
+  contacto: string;
   nombre_evento: string;
   aforo: number;
   dias: number;
@@ -19,6 +28,8 @@ export interface EventoInput {
   monto_producto: number;
 }
 
+export const MARCA_MAX = 120;
+export const CONTACTO_MAX = 120;
 export const AFORO_MAX = 500_000;
 export const DIAS_MAX = 30;
 export const TERRITORIO_MIN = 1;

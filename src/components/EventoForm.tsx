@@ -5,8 +5,10 @@ import {
   ACTIVACION_OPTIONS,
   AFORO_MAX,
   CIUDAD_TIER_OPTIONS,
+  CONTACTO_MAX,
   DIAS_MAX,
   LINEUP_OPTIONS,
+  MARCA_MAX,
   TERRITORIO_MAX,
   TERRITORIO_MIN,
   TERRITORIO_PRESETS,
@@ -23,6 +25,8 @@ import {
 } from "@/components/ui";
 
 const initialForm: EventoInput = {
+  marca: "",
+  contacto: "",
   nombre_evento: "",
   aforo: 0,
   dias: 1,
@@ -70,6 +74,38 @@ export function EventoForm({
 
   return (
     <form onSubmit={handleSubmit} noValidate className="space-y-4">
+      <Field
+        label="Marca"
+        error={errors.marca}
+        hint={form.marca.trim() ? undefined : "A quién se le envía esta cotización."}
+      >
+        {(p) => (
+          <Input
+            {...p}
+            type="text"
+            value={form.marca}
+            maxLength={MARCA_MAX}
+            placeholder="Ej. Michelob Ultra"
+            autoComplete="organization"
+            onChange={(e) => handleChange("marca", e.target.value)}
+          />
+        )}
+      </Field>
+
+      <Field label="Contacto (opcional)" error={errors.contacto}>
+        {(p) => (
+          <Input
+            {...p}
+            type="text"
+            value={form.contacto}
+            maxLength={CONTACTO_MAX}
+            placeholder="Ej. Ana Rodríguez"
+            autoComplete="name"
+            onChange={(e) => handleChange("contacto", e.target.value)}
+          />
+        )}
+      </Field>
+
       <Field label="Nombre del evento" error={errors.nombre_evento}>
         {(p) => (
           <Input

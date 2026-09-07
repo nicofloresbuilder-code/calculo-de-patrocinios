@@ -24,6 +24,8 @@ import { validateEvento, type EventoErrors } from "../validateEvento.ts";
 
 /** Allowlist explícita: solo estas llaves cruzan del cliente al servidor. */
 const CAMPOS_PERMITIDOS = [
+  "marca",
+  "contacto",
   "nombre_evento",
   "aforo",
   "dias",
@@ -87,6 +89,8 @@ export function parseEventoInput(raw: unknown): ParseResult {
   if (Object.keys(errores).length > 0) return { ok: false, errores };
 
   const candidato: EventoInput = {
+    marca: typeof raw.marca === "string" ? raw.marca.trim() : "",
+    contacto: typeof raw.contacto === "string" ? raw.contacto.trim() : "",
     nombre_evento:
       typeof raw.nombre_evento === "string" ? raw.nombre_evento.trim() : "",
     aforo: aNumero(raw.aforo),
