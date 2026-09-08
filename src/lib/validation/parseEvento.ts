@@ -33,6 +33,7 @@ const CAMPOS_PERMITIDOS = [
   "exclusiva",
   "activacion",
   "ciudad_tier",
+  "tiene_territorio",
   "territorio_lado",
   "paga_con_producto",
   "monto_producto",
@@ -99,6 +100,9 @@ export function parseEventoInput(raw: unknown): ParseResult {
     exclusiva: aBooleano(raw.exclusiva),
     activacion: activacion!,
     ciudad_tier: ciudad_tier!,
+    // Ausente = true, para no romper cotizaciones viejas ni clientes que
+    // todavía no mandan el campo.
+    tiene_territorio: raw.tiene_territorio === undefined ? true : aBooleano(raw.tiene_territorio),
     territorio_lado: aNumero(raw.territorio_lado),
     paga_con_producto: aBooleano(raw.paga_con_producto),
     monto_producto: aBooleano(raw.paga_con_producto)
@@ -110,6 +114,11 @@ export function parseEventoInput(raw: unknown): ParseResult {
   // pero con un mensaje confuso. Se traduce antes.
   for (const campo of ["aforo", "dias", "territorio_lado", "monto_producto"] as const) {
     if (Number.isNaN(candidato[campo])) {
+      // Sin espacio físico, el lado no se usa: se normaliza sin marcar error.
+      if (campo === "territorio_lado" && !candidato.tiene_territorio) {
+        candidato.territorio_lado = 0;
+        continue;
+      }
       errores[campo] = "Debe ser un número.";
       candidato[campo] = 0;
     }

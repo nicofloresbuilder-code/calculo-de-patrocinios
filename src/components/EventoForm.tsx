@@ -16,6 +16,7 @@ import {
 } from "@/lib/types";
 import { validateEvento, type EventoErrors } from "@/lib/validateEvento";
 import {
+  Alert,
   Button,
   Checkbox,
   Field,
@@ -34,6 +35,7 @@ const initialForm: EventoInput = {
   exclusiva: false,
   activacion: "oficial",
   ciudad_tier: "tier1",
+  tiene_territorio: true,
   territorio_lado: 5,
   paga_con_producto: false,
   monto_producto: 0,
@@ -197,32 +199,53 @@ export function EventoForm({
         onCheckedChange={(v) => handleChange("exclusiva", v)}
       />
 
-      <div className="space-y-2">
-        <Field
-          label="Territorio de la activación"
-          error={errors.territorio_lado}
-          suffix={`m por lado · ${(form.territorio_lado || 0) ** 2} m²`}
-        >
-          {(p) => (
-            <Input
-              {...p}
-              type="number"
-              inputMode="decimal"
-              value={form.territorio_lado || ""}
-              min={TERRITORIO_MIN}
-              max={TERRITORIO_MAX}
-              step={0.5}
-              onChange={(e) => handleChange("territorio_lado", Number(e.target.value))}
-            />
-          )}
-        </Field>
-        {/* Atajos a los tamaños habituales; el campo de arriba sigue siendo libre */}
-        <SegmentedControl
-          label="Tamaños de activación habituales"
-          options={TERRITORIO_OPTIONS}
-          value={form.territorio_lado}
-          onChange={(lado) => handleChange("territorio_lado", lado)}
+      <div className="space-y-3 rounded-md border border-line-subtle p-3">
+        <Checkbox
+          label="Incluye espacio de activación"
+          checked={form.tiene_territorio}
+          onCheckedChange={(v) => handleChange("tiene_territorio", v)}
+          hint={
+            form.tiene_territorio
+              ? undefined
+              : "Solo presencia: logo, menciones y branding, sin espacio físico."
+          }
         />
+
+        {form.tiene_territorio ? (
+          <>
+            <Field
+              label="Territorio de la activación"
+              error={errors.territorio_lado}
+              suffix={`m por lado · ${(form.territorio_lado || 0) ** 2} m²`}
+            >
+              {(p) => (
+                <Input
+                  {...p}
+                  type="number"
+                  inputMode="decimal"
+                  value={form.territorio_lado || ""}
+                  min={TERRITORIO_MIN}
+                  max={TERRITORIO_MAX}
+                  step={0.5}
+                  onChange={(e) => handleChange("territorio_lado", Number(e.target.value))}
+                />
+              )}
+            </Field>
+            {/* Atajos a los tamaños habituales; el campo de arriba sigue libre */}
+            <SegmentedControl
+              label="Tamaños de activación habituales"
+              options={TERRITORIO_OPTIONS}
+              value={form.territorio_lado}
+              onChange={(lado) => handleChange("territorio_lado", lado)}
+            />
+          </>
+        ) : (
+          <Alert tone="warning" title="Precio sin calibrar">
+            El descuento por no incluir espacio físico es provisional: todavía
+            no hay un precio real de referencia para un deal de solo presencia.
+            Toma el número como orientativo y ajústalo a mano.
+          </Alert>
+        )}
       </div>
 
       <div className="space-y-3 rounded-md border border-line-subtle p-3">

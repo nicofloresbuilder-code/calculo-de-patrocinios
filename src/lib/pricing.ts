@@ -107,6 +107,30 @@ export const TERRITORIO_ANCLAS: { lado: number; factor: number }[] = [
   { lado: 15, factor: 2.69 },
 ];
 
+/**
+ * Factor cuando el patrocinio NO incluye espacio físico — la marca solo
+ * tiene presencia (logo, menciones, branding).
+ *
+ * ⚠️ PROVISIONAL, SIN CALIBRAR. Hace falta un precio real de Nicolás.
+ *
+ * Por qué NO puede ser 1.0: las bases de `BASE_ACTIVACION` se ajustaron con
+ * el 5×5 valiendo 1.0 (ver la nota de TERRITORIO_ANCLAS). Poner 1.0 aquí
+ * cobraría lo mismo por "solo presencia" que por una activación de 5×5, que
+ * es justo el error que este campo viene a evitar.
+ *
+ * Por qué 0.15 y no un número inventado: es el piso que la fórmula YA le
+ * asigna a un stand diminuto (ver `territorioFactor`, extrapolación por
+ * debajo de 2×2). Reutilizarlo es la opción más conservadora disponible sin
+ * inventar un dato nuevo. NO es una estimación del valor real de un deal de
+ * solo presencia.
+ *
+ * PARA CALIBRARLO hace falta una cifra: ¿en cuánto cotizarías el mismo
+ * evento del Grupo A (15,000 personas · 2 días · line-up B · CDMX ·
+ * patrocinador oficial · con exclusividad) si la marca SOLO tiene presencia,
+ * sin espacio físico? Con ese número esto deja de ser provisional.
+ */
+export const SIN_TERRITORIO_FACTOR = 0.15;
+
 export const TERRITORIO_LADO_MIN = 1;
 export const TERRITORIO_LADO_MAX = 30;
 
@@ -143,6 +167,12 @@ export interface ComputePriceInput {
   ciudad_tier: CiudadTier;
   /** Lado en metros del espacio de activación (2 = 2x2). Default 5x5. */
   territorio_lado?: number;
+  /**
+   * Si el patrocinio incluye espacio físico. Default `true` a propósito: así
+   * todo el código y los tests que existían antes de este campo siguen
+   * calculando exactamente lo mismo.
+   */
+  tiene_territorio?: boolean;
 }
 
 export interface PriceFactors {
@@ -180,6 +210,7 @@ export function computePrice({
   exclusiva,
   ciudad_tier,
   territorio_lado = 5,
+  tiene_territorio = true,
 }: ComputePriceInput): ComputePriceResult {
   const base = BASE_ACTIVACION[activacion];
 
@@ -189,7 +220,9 @@ export function computePrice({
     lineup: LINEUP_FACTOR[lineup],
     exclusividad: exclusiva ? 1.25 : 1.0,
     ciudad: CIUDAD_FACTOR[ciudad_tier],
-    territorio: territorioFactor(territorio_lado),
+    territorio: tiene_territorio
+      ? territorioFactor(territorio_lado)
+      : SIN_TERRITORIO_FACTOR,
   };
 
   const totalFactor = Object.values(factors).reduce((a, b) => a * b, 1);

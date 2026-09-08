@@ -72,7 +72,11 @@ export function validateEvento(input: EventoInput): EventoErrors {
     errors.ciudad_tier = "Selecciona una ciudad/tier válida.";
   }
 
-  if (!Number.isFinite(input.territorio_lado) || input.territorio_lado <= 0) {
+  // El territorio solo se valida cuando el patrocinio lo incluye. Antes era
+  // obligatorio siempre, y eso bloqueaba las cotizaciones de solo presencia.
+  if (!input.tiene_territorio) {
+    // sin espacio físico no hay medida que validar
+  } else if (!Number.isFinite(input.territorio_lado) || input.territorio_lado <= 0) {
     errors.territorio_lado = "El territorio debe ser mayor a 0.";
   } else if (input.territorio_lado < TERRITORIO_MIN) {
     errors.territorio_lado = `Mínimo ${TERRITORIO_MIN}×${TERRITORIO_MIN} m.`;

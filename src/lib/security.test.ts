@@ -145,6 +145,7 @@ const EVENTO_VALIDO = {
   exclusiva: true,
   activacion: "oficial",
   ciudad_tier: "tier1",
+  tiene_territorio: true,
   territorio_lado: 5,
   paga_con_producto: false,
   monto_producto: 0,

@@ -146,7 +146,9 @@ export async function POST(request: Request) {
       exclusiva: evento.exclusiva,
       activacion: evento.activacion,
       ciudad_tier: evento.ciudad_tier,
-      territorio_lado: evento.territorio_lado,
+      tiene_territorio: evento.tiene_territorio,
+      // Sin espacio físico no hay medida que guardar: NULL es el hecho.
+      territorio_lado: evento.tiene_territorio ? evento.territorio_lado : null,
       paga_con_producto: evento.paga_con_producto,
       monto_producto: evento.paga_con_producto ? evento.monto_producto : null,
       precio_min: precio.min,
