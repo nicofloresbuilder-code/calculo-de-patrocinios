@@ -115,7 +115,7 @@ diseño y viaja en el bundle— bastaba para leer la tabla entera. Ver #4.
 
 ---
 
-### #4 — ENABLE ROW-LEVEL SECURITY · **NEEDS ATTENTION** (corrección escrita, falta aplicar) · severidad **CRITICAL**
+### #4 — ENABLE ROW-LEVEL SECURITY · **FIXED** (aplicado en producción 2026-09-08) · severidad **CRITICAL**
 
 **Aplica**: Postgres soporta RLS y ya estaba activo en ambas tablas.
 
@@ -156,8 +156,16 @@ Ver #8, que es el mismo defecto visto desde el ángulo de field tampering.
 dueño correcto, y **sin políticas de UPDATE/DELETE**, que en RLS significa
 denegado. Eso es deny-by-default bien hecho y no se tocó.
 
-**Estado:** la migración está escrita y **no aplicada** — requiere un
-proyecto de Supabase vivo (el actual da NXDOMAIN, ver `DECISIONS.md`).
+**Estado: APLICADO Y VERIFICADO EN PRODUCCIÓN (2026-09-08).**
+
+El proyecto de Supabase resultó estar *pausado*, no borrado; se reactivó y se
+corrieron las migraciones. Verificación corrida contra la base real:
+
+| Revisión | Resultado |
+|---|---|
+| Tablas del esquema `public` sin RLS | **0** ✅ |
+| Políticas con `qual = true` | **0** ✅ |
+| `comparables` exige `auth.uid()` | **1 política** ✅ |
 
 **Archivos:** `supabase/migrations/0005_endurecimiento_rls.sql`
 
@@ -262,6 +270,10 @@ producto es *"el número es defendible porque salió de una fórmula
 determinista y auditable, calibrada con deals reales"*. Si el precio guardado
 puede ser cualquier cosa, lo guardado deja de ser evidencia de nada — y es un
 registro comercial interno que se usa para defender precios frente a marcas.
+
+**Estado: CERRADO. Los tres frentes aplicados y verificados en producción
+(2026-09-08).** Comprobado contra la base real: `authenticated` ya no
+tiene privilegio `INSERT` sobre `cotizaciones` (0 grants).
 
 **Corregido en tres frentes, porque uno solo no bastaba:**
 
@@ -635,7 +647,7 @@ alertas continuas en vez de un escaneo puntual.
 | 1 | Hide API keys | **FIXED** | HIGH | Verificado que no hay fuga al bundle; corregido mensaje que revelaba nombre de variable |
 | 2 | Purge git secrets | **SECURE** | — | 151 blobs escaneados, 0 secretos. Rotar `ANTHROPIC_API_KEY` por motivo externo (§5) |
 | 3 | Public DB keys | **FIXED** | HIGH | Cliente `service_role` server-only con contrato de uso |
-| 4 | Row-Level Security | **NEEDS ATTENTION** | **CRITICAL** | `0005` escrita — **falta aplicarla en Supabase** |
+| 4 | Row-Level Security | **FIXED** | **CRITICAL** | `0005` aplicada y verificada en producción (2026-09-08) |
 | 5 | Encrypt sensitive data | **SECURE** | — | Clasificado; RLS es el control correcto aquí, no cifrado |
 | 6 | Server-side authz | **FIXED** | HIGH | `requirePermission()` en todos los endpoints; 401/403 verificados |
 | 7 | Lock record access | **SECURE** | MEDIUM | RLS por dueño; patrón documentado para rutas por ID |
@@ -653,7 +665,7 @@ alertas continuas en vez de un escaneo puntual.
 | 19 | Force HTTPS | **SECURE** | LOW | Vercel + HSTS (sin `preload`, a propósito) |
 | 20 | Scan dependencies | **SECURE** | — | 0 vulnerabilidades. Activar Dependabot (§7) |
 
-**FIXED 9 · SECURE 7 · NEEDS ATTENTION 2 · NOT APPLICABLE 2**
+**FIXED 10 · SECURE 7 · NEEDS ATTENTION 1 · NOT APPLICABLE 2**
 
 ---
 
@@ -710,7 +722,20 @@ limpio.
 
 ## 6. Cambios que necesitan tu aprobación
 
-### A) Aplicar `0005_endurecimiento_rls.sql` — 🔴 el más importante
+### A) ~~Aplicar `0005_endurecimiento_rls.sql`~~ — ✅ HECHO (2026-09-08)
+
+Aplicada y verificada en producción. Ver #4 y #8. Lo que queda de esta
+sección es el requisito que ahora es OBLIGATORIO, no opcional:
+
+> **`SUPABASE_SERVICE_ROLE_KEY` debe estar configurada en Vercel.** Antes de
+> aplicar `0005`, el guardado de cotizaciones funcionaba por el camino de
+> sesión de usuario. Ahora ese camino está revocado a propósito, así que sin
+> esa variable el guardado falla. No es una regresión: es la revocación
+> haciendo su trabajo.
+
+<details><summary>Texto original de este pendiente</summary>
+
+#### Aplicar `0005_endurecimiento_rls.sql` — 🔴 el más importante
 
 Cierra los dos hallazgos CRITICAL (#4 y #8). **Sin esto, el arreglo de código
 de #8 es parcial**: el usuario puede saltarse el endpoint y escribir directo
@@ -719,8 +744,9 @@ en la REST API de Supabase.
 **Requisito previo:** `SUPABASE_SERVICE_ROLE_KEY` configurada en Vercel
 **antes** de aplicarla, o el guardado de cotizaciones dejará de funcionar.
 
-**No puedo aplicarla yo:** no tengo acceso al proyecto de Supabase, y además
-el proyecto actual no resuelve por DNS.
+**No puedo aplicarla yo:** no tengo acceso al proyecto de Supabase.
+
+</details>
 
 ### B) `httpOnly: true` en la cookie de sesión
 

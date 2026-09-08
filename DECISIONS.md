@@ -384,3 +384,72 @@ Se agregó `0003_corregir_comparables.sql` para arreglarlo en un proyecto existe
 - **Si hay que crear uno nuevo:** correr `setup-proyecto-nuevo.sql` (unión de las tres, con montos ya corregidos), y actualizar `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_ANON_KEY` y `SUPABASE_SERVICE_ROLE_KEY` en Vercel y en `.env.local`.
 
 **Decisión pendiente para Nicolás:** si Goleiro debe seguir sirviendo como comparable para la IA. Es un hecho histórico real, pero él mismo lo marcó como subvaluado — citarlo empuja las cotizaciones hacia abajo. El monto se corrigió; si debe salir de la tabla, es decisión suya.
+
+---
+
+## Sesión — 2026-09-08 — Supabase reactivado y migraciones aplicadas
+
+### CORRECCIÓN: el proyecto estaba PAUSADO, no borrado
+
+La sesión del 2026-08-30 concluyó que el NXDOMAIN del subdominio *"apunta más
+bien a borrado"*, razonando que un proyecto pausado conserva su subdominio.
+**Eso era incorrecto.**
+
+La señal que lo delató: el proyecto de Cotejo —que se usó activamente días
+antes y que en su momento sirvió como control porque *sí* resolvía— empezó a
+dar NXDOMAIN también. Dos proyectos inactivos, ambos fuera del DNS, ninguno
+borrado por nadie. Esa es la firma de la **pausa automática del free tier**,
+no de un borrado.
+
+El dashboard lo confirmó: *"Project 'aforo' is paused — All data, including
+backups and storage objects, remains safe."* Se reactivó con **Resume
+project** y el subdominio volvió a resolver, con la misma URL y las mismas
+llaves de antes.
+
+**Lección:** en el free tier de Supabase, NXDOMAIN del subdominio NO permite
+distinguir pausa de borrado. La única fuente de verdad es el dashboard.
+
+### Migraciones aplicadas
+
+Se creó `supabase/APLICAR-TODO-PENDIENTE.sql`, unión de 0002 a 0006 hecha
+idempotente (guardas en create type / table / policy / trigger, `on conflict
+do nothing` en los seeds), y probada antes contra un Postgres 16 local con
+stubs de `auth.users` y `auth.uid()`.
+
+**Tropiezo al aplicarla:** el primer intento falló con *"Failed to get
+project's logs"*. La consulta había quedado en el editor de **Logs**
+(ClickHouse), no en el **SQL Editor** (Postgres) — dos motores distintos en
+la misma pantalla. Se resolvió abriendo una pestaña nueva con el botón `+`.
+Vale documentarlo porque el error no dice nada sobre la causa.
+
+**Verificado contra la base real:**
+
+| Revisión | Resultado |
+|---|---|
+| Permisos en el catálogo | 18 ✅ |
+| Roles | 6 ✅ |
+| Asignaciones rol→permiso | 55 ✅ |
+| Columnas `marca` y `contacto` | 2 ✅ |
+| Tablas sin RLS | 0 ✅ |
+| Políticas con `qual = true` | 0 ✅ |
+| `comparables` exige `auth.uid()` | 1 política ✅ |
+| `INSERT` de `authenticated` en `cotizaciones` | 0 grants ✅ |
+
+Los cuatro primeros coinciden exactamente con los de la prueba local.
+
+### Los dos hallazgos CRITICAL quedaron cerrados
+
+1. `comparables` ya no es legible sin sesión iniciada.
+2. El navegador ya no puede escribir un precio arbitrario en `cotizaciones`.
+
+### Consecuencia inmediata: la service-role key dejó de ser opcional
+
+`0005` revoca el `INSERT` directo de `authenticated`. El endpoint
+`POST /api/cotizaciones` usa el cliente `service_role` cuando está
+configurado, y **cae al cliente de sesión cuando no lo está** — un camino que
+antes funcionaba y que a partir de ahora está revocado.
+
+Es decir: **sin `SUPABASE_SERVICE_ROLE_KEY` en Vercel, guardar cotizaciones
+falla.** No es una regresión, es la revocación haciendo su trabajo; pero el
+orden importaba y en la instrucción que se le dio a Nicolás se dijo que
+Vercel "podía esperar". No podía. Queda corregido aquí.
