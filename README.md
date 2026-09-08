@@ -54,6 +54,7 @@ npx tsc --noEmit # typecheck
 | `PRODUCT-UI-AUDIT.md` | Auditoría de UX/UI/frontend/accesibilidad y prioridades |
 | `RBAC-ARCHITECTURE.md` | Modelo de usuarios, roles y permisos; capas de seguridad |
 | `SECURITY-AUDIT.md` | Auditoría de seguridad: 20 controles, hallazgos, correcciones y pendientes |
+| `SETUP-SUPABASE.md` | **Empieza aquí si la app no guarda nada**: poner Supabase en marcha paso a paso |
 | `DECISIONS.md` | Bitácora de decisiones: por qué cada número de la fórmula es el que es |
 | `docs/PACKET.md` | El problema, el usuario y el benchmark |
 | `.claude/skills/` | Guías de trabajo para agentes de código en este repo |
