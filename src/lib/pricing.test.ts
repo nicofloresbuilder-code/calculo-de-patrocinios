@@ -163,3 +163,44 @@ test("el preset de 3×3 interpola entre las anclas reales de 2 y 5", () => {
   assert.equal(f5, 1.0, "el ancla real de 5×5 sigue en su lugar");
   assert.ok(f3 > f2 && f3 < f5, "3×3 debe caer entre las dos anclas");
 });
+
+test("ANCLA: solo presencia reproduce el precio real de Nicolás", () => {
+  // $1,000,000 para el evento del Grupo A sin espacio físico (2026-09-08).
+  // Mismo caso con el que se calibraron las 4 anclas de territorio.
+  const r = computePrice({
+    activacion: "oficial",
+    aforo: 15000,
+    dias: 2,
+    lineup: "B",
+    exclusiva: true,
+    ciudad_tier: "tier1",
+    tiene_territorio: false,
+  });
+  const desvio = Math.abs(r.objetivo / 1_000_000 - 1);
+  assert.ok(
+    desvio < 0.01,
+    `solo presencia debería dar ~$1,000,000, dio ${Math.round(r.objetivo)} (desvío ${(desvio * 100).toFixed(2)}%)`,
+  );
+});
+
+test("DOCUMENTA LA INCONSISTENCIA: solo presencia sale más caro que un stand chico", () => {
+  // Este test NO valida un comportamiento deseado: fija uno que está en
+  // revisión, para que si alguien cambia las anclas o el factor, se entere de
+  // que esto se movió. Ver la nota de SIN_TERRITORIO_FACTOR.
+  const base = {
+    activacion: "oficial" as const,
+    aforo: 15000,
+    dias: 2,
+    lineup: "B" as const,
+    exclusiva: true,
+    ciudad_tier: "tier1" as const,
+  };
+  const sinEspacio = computePrice({ ...base, tiene_territorio: false }).objetivo;
+  const dosPorDos = computePrice({ ...base, territorio_lado: 2 }).objetivo;
+  const tresPorTres = computePrice({ ...base, territorio_lado: 3 }).objetivo;
+  const cincoPorCinco = computePrice({ ...base, territorio_lado: 5 }).objetivo;
+
+  assert.ok(sinEspacio > dosPorDos, "hoy: sin espacio > 2×2 (pendiente de resolver)");
+  assert.ok(sinEspacio > tresPorTres, "hoy: sin espacio > 3×3 (pendiente de resolver)");
+  assert.ok(sinEspacio < cincoPorCinco, "sin espacio sí debe costar menos que un 5×5");
+});

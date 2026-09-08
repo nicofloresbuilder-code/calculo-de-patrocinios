@@ -111,25 +111,46 @@ export const TERRITORIO_ANCLAS: { lado: number; factor: number }[] = [
  * Factor cuando el patrocinio NO incluye espacio físico — la marca solo
  * tiene presencia (logo, menciones, branding).
  *
- * ⚠️ PROVISIONAL, SIN CALIBRAR. Hace falta un precio real de Nicolás.
+ * CALIBRADO con un precio real de Nicolás (2026-09-08): $1,000,000 para el
+ * mismo evento del Grupo A con el que se calibraron las 4 anclas de
+ * territorio (15,000 pers · 2 días · line-up B · CDMX · oficial · con
+ * exclusividad).
  *
- * Por qué NO puede ser 1.0: las bases de `BASE_ACTIVACION` se ajustaron con
- * el 5×5 valiendo 1.0 (ver la nota de TERRITORIO_ANCLAS). Poner 1.0 aquí
- * cobraría lo mismo por "solo presencia" que por una activación de 5×5, que
- * es justo el error que este campo viene a evitar.
+ * Derivado con la MISMA aritmética que las anclas — precio real dividido
+ * entre lo que da la fórmula con territorio neutro ($1,188,633):
  *
- * Por qué 0.15 y no un número inventado: es el piso que la fórmula YA le
- * asigna a un stand diminuto (ver `territorioFactor`, extrapolación por
- * debajo de 2×2). Reutilizarlo es la opción más conservadora disponible sin
- * inventar un dato nuevo. NO es una estimación del valor real de un deal de
- * solo presencia.
+ *     1,000,000 / 1,188,633 = 0.8413  →  0.84   (desvío -0.15%)
  *
- * PARA CALIBRARLO hace falta una cifra: ¿en cuánto cotizarías el mismo
- * evento del Grupo A (15,000 personas · 2 días · line-up B · CDMX ·
- * patrocinador oficial · con exclusividad) si la marca SOLO tiene presencia,
- * sin espacio físico? Con ese número esto deja de ser provisional.
+ * El método se validó reproduciendo las 4 anclas existentes:
+ *     2×2   400,000 / 1,188,633 = 0.34 ✓
+ *     5×5 1,200,000 / 1,188,633 = 1.00 ✓
+ *   10×10 2,000,000 / 1,188,633 = 1.68 ✓
+ *   15×15 3,200,000 / 1,188,633 = 2.69 ✓
+ *
+ * ⚠️ INCONSISTENCIA CONOCIDA, PENDIENTE DE RESOLVER CON NICOLÁS
+ *
+ * Este 0.84 queda POR ENCIMA de las anclas de 2×2 (0.34) y 3×3 (0.56). O sea
+ * que, con los datos actuales, poner un stand chico sale MÁS BARATO que no
+ * poner nada:
+ *
+ *     sin espacio  $998,452
+ *     2×2          $404,135
+ *     3×3          $665,634
+ *     5×5        $1,188,633
+ *
+ * Las dos lecturas posibles:
+ *
+ *  a) Son productos distintos, no puntos de la misma curva. "Solo presencia"
+ *     sería un paquete de visibilidad sobre TODO el evento, mientras que un
+ *     2×2 es una marca chica con presupuesto chico. Si es así, el modelo no
+ *     debería tratarlos como la misma variable.
+ *
+ *  b) Alguno de los dos números necesita revisarse.
+ *
+ * Mientras se resuelve, se usa el dato tal cual lo dio — no se ajusta ni se
+ * promedia nada por cuenta propia. Ver DECISIONS.md.
  */
-export const SIN_TERRITORIO_FACTOR = 0.15;
+export const SIN_TERRITORIO_FACTOR = 0.84;
 
 export const TERRITORIO_LADO_MIN = 1;
 export const TERRITORIO_LADO_MAX = 30;

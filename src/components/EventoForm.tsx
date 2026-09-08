@@ -240,10 +240,10 @@ export function EventoForm({
             />
           </>
         ) : (
-          <Alert tone="warning" title="Precio sin calibrar">
-            El descuento por no incluir espacio físico es provisional: todavía
-            no hay un precio real de referencia para un deal de solo presencia.
-            Toma el número como orientativo y ajústalo a mano.
+          <Alert tone="info" title="Precio de solo presencia">
+            Calibrado con un deal real: vale el 84% de una activación de 5×5.
+            Ojo — con los datos actuales sale más caro que un stand de 2×2 o
+            3×3, lo cual sigue en revisión.
           </Alert>
         )}
       </div>

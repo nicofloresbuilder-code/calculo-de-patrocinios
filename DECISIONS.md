@@ -453,3 +453,70 @@ Es decir: **sin `SUPABASE_SERVICE_ROLE_KEY` en Vercel, guardar cotizaciones
 falla.** No es una regresión, es la revocación haciendo su trabajo; pero el
 orden importaba y en la instrucción que se le dio a Nicolás se dijo que
 Vercel "podía esperar". No podía. Queda corregido aquí.
+
+---
+
+## Sesión — 2026-09-08 (2) — Calibración de "solo presencia"
+
+### El dato
+
+Nicolás dio el precio que faltaba: **$1,000,000** para el evento del Grupo A
+(15,000 pers · 2 días · line-up B · CDMX · oficial · con exclusividad) cuando
+la marca **solo tiene presencia**, sin espacio físico.
+
+Derivado con la misma aritmética que las 4 anclas de territorio — precio real
+entre lo que da la fórmula con territorio neutro ($1,188,633):
+
+    1,000,000 / 1,188,633 = 0.8413  →  SIN_TERRITORIO_FACTOR = 0.84
+
+El método se validó primero reproduciendo las anclas existentes: 2×2 → 0.34,
+5×5 → 1.00, 10×10 → 1.68, 15×15 → 2.69. Los cuatro salen exactos, así que la
+derivación es consistente con cómo se calibró todo lo demás.
+
+**El valor provisional que se había puesto (0.15) estaba 5.6× por debajo.**
+Se había elegido reutilizando el piso de la extrapolación para no inventar un
+número, y la UI lo marcaba como sin calibrar. Queda corregido con dato real.
+
+### 🔴 INCONSISTENCIA ABIERTA: solo presencia sale más caro que un stand chico
+
+Con los datos actuales, el mismo evento variando solo el espacio:
+
+| Espacio | Factor | Precio |
+|---|---|---|
+| **Sin espacio** | 0.84 | **$998,452** |
+| 2×2 | 0.34 | $404,135 |
+| 3×3 | 0.56 | $665,634 |
+| 5×5 | 1.00 | $1,188,633 |
+
+Es decir: **poner un stand de 2×2 hace el patrocinio 60% más barato que no
+poner nada.** El punto de equilibrio está alrededor de 4.3×4.3.
+
+Eso no puede ser cierto como curva continua. Dos lecturas posibles:
+
+**a) Son productos distintos, no puntos de la misma curva.** "Solo presencia"
+sería un paquete de visibilidad sobre todo el evento (logo en pantallas,
+menciones, branding), mientras que un 2×2 es una marca chica con presupuesto
+chico que quiere una esquina. Si es así, el modelo NO debería tratarlos como
+la misma variable: harían falta dos caminos de precio distintos, no un factor
+en la misma escala.
+
+**b) Alguno de los dos números necesita revisarse** — quizá el 2×2 de
+$400,000 no era una variación pura de territorio sobre el mismo paquete.
+
+**Mientras se resuelve se usa el dato tal cual lo dio.** No se promedió, no se
+ajustó, no se inventó un punto intermedio. Hay un test
+(`DOCUMENTA LA INCONSISTENCIA: ...`) que fija el comportamiento actual para
+que, si alguien mueve las anclas o el factor, se entere de que esto cambió.
+
+### Otras respuestas de Nicolás en la misma sesión
+
+- **Producto:** lo que hace falta no es un campo de costo. Es poder **entrar
+  el producto de tres formas**: como porcentaje del deal, como cantidad de
+  unidades, o como monto directo. Hoy solo existe la tercera.
+- **Tipo de producto:** cambia en cada deal según la industria de la marca
+  (tequila ≠ refresco), así que va como selección por cotización, no como
+  configuración global.
+- **Precio de venta en festival:** lo pone él. Se queda editable.
+- **Eventos:** un evento **se cotiza varias veces, a varias marcas**. Confirma
+  que `eventos` debe ser una entidad propia y que `cotizaciones` la referencia
+  — no un campo repetido dentro de cada cotización.
