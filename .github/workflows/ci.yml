@@ -20,9 +20,9 @@ jobs:
     timeout-minutes: 15
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v5
         with:
           # Node 22 es obligatorio, no una preferencia: los tests corren con
           # `node --experimental-strip-types`, que no existe en Node 20.
@@ -37,6 +37,14 @@ jobs:
 
       - name: Lint
         run: npm run lint
+
+      # `next typegen` ANTES de tsc, no por gusto: Next genera tipos globales
+      # en .next/types (LayoutProps, PageProps…) que el código usa. Sin este
+      # paso, `tsc --noEmit` sobre un checkout limpio falla con
+      # "Cannot find name 'LayoutProps'" — que es justo como se cayó la
+      # primera versión de este workflow.
+      - name: Generar tipos de rutas
+        run: npx next typegen
 
       - name: Typecheck
         run: npx tsc --noEmit
@@ -53,8 +61,8 @@ jobs:
     timeout-minutes: 10
 
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
         with:
           node-version: 22
           cache: npm
@@ -72,7 +80,7 @@ jobs:
     timeout-minutes: 10
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
         with:
           # Historial completo: el objetivo es que un secreto no entre por un
           # commit intermedio que luego se "arregla" en el siguiente.
