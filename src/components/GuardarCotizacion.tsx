@@ -25,12 +25,28 @@ export function GuardarCotizacion({
   const [status, setStatus] = useState<Status>("idle");
   const [error, setError] = useState<string | null>(null);
 
+  // Mismo criterio que en el topbar: un login que falla en silencio deja al
+  // usuario sin nada que hacer ni que reportar.
   async function signIn() {
-    const supabase = createClient();
-    await supabase.auth.signInWithOAuth({
-      provider: "google",
-      options: { redirectTo: `${window.location.origin}/auth/callback` },
-    });
+    setError(null);
+    try {
+      const supabase = createClient();
+      const { error: err } = await supabase.auth.signInWithOAuth({
+        provider: "google",
+        options: { redirectTo: `${window.location.origin}/auth/callback` },
+      });
+      if (err) {
+        console.error("Error al iniciar sesión con Google:", err);
+        setStatus("error");
+        setError(err.message);
+      }
+    } catch (e) {
+      console.error("No se pudo iniciar el flujo de sesión:", e);
+      setStatus("error");
+      setError(
+        "No se pudo contactar al servicio de autenticación. Revisa la configuración de Supabase.",
+      );
+    }
   }
 
   async function handleGuardar() {
@@ -72,13 +88,20 @@ export function GuardarCotizacion({
 
   if (!ctx.userId) {
     return (
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <p className="text-xs text-fg-subtle">
-          Inicia sesión para guardar esta cotización y consultarla después.
-        </p>
-        <Button size="sm" onClick={signIn}>
-          Iniciar sesión
-        </Button>
+      <div className="space-y-3">
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <p className="text-xs text-fg-subtle">
+            Inicia sesión para guardar esta cotización y consultarla después.
+          </p>
+          <Button size="sm" onClick={signIn}>
+            Iniciar sesión
+          </Button>
+        </div>
+        {error && (
+          <Alert tone="danger" title="No se pudo iniciar sesión">
+            {error}
+          </Alert>
+        )}
       </div>
     );
   }

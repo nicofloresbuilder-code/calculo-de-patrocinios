@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
-import { Button, Icon, cn } from "@/components/ui";
+import { Alert, Button, Icon, cn } from "@/components/ui";
 import { ROLE_LABELS } from "@/lib/auth/permissions";
 import { useAuthz } from "@/components/auth/AuthzProvider";
 
@@ -16,6 +16,7 @@ export function UserMenu() {
   const router = useRouter();
   const [open, setOpen] = useState(false);
   const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
   const wrapRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -34,13 +35,38 @@ export function UserMenu() {
     };
   }, [open]);
 
+  /**
+   * Antes esto no miraba el resultado. Si Supabase devolvía un error —el
+   * proveedor apagado, la URL de retorno fuera de la lista, las variables
+   * de entorno sin configurar— el botón se quedaba girando y en pantalla
+   * no pasaba absolutamente nada. Un fallo silencioso en el login es de lo
+   * peor que puede hacer una aplicación: no hay forma de saber qué
+   * arreglar.
+   */
   async function signIn() {
     setBusy(true);
-    const supabase = createClient();
-    await supabase.auth.signInWithOAuth({
-      provider: "google",
-      options: { redirectTo: `${window.location.origin}/auth/callback` },
-    });
+    setError(null);
+    try {
+      const supabase = createClient();
+      const { error: err } = await supabase.auth.signInWithOAuth({
+        provider: "google",
+        options: { redirectTo: `${window.location.origin}/auth/callback` },
+      });
+      if (err) {
+        console.error("Error al iniciar sesión con Google:", err);
+        setError(err.message);
+        setBusy(false);
+      }
+      // Sin error el navegador se va a Google: no hay nada que apagar.
+    } catch (e) {
+      // createClient() revienta si faltan las variables públicas de
+      // Supabase, y eso pasa antes de cualquier petición.
+      console.error("No se pudo iniciar el flujo de sesión:", e);
+      setError(
+        "No se pudo contactar al servicio de autenticación. Revisa la configuración de Supabase.",
+      );
+      setBusy(false);
+    }
   }
 
   async function signOut() {
@@ -56,9 +82,20 @@ export function UserMenu() {
 
   if (!ctx.userId) {
     return (
-      <Button variant="primary" size="sm" onClick={signIn} loading={busy}>
-        Iniciar sesión
-      </Button>
+      <div className="relative">
+        <Button variant="primary" size="sm" onClick={signIn} loading={busy}>
+          Iniciar sesión
+        </Button>
+        {error && (
+          <Alert
+            tone="danger"
+            title="No se pudo iniciar sesión"
+            className="absolute right-0 top-full z-50 mt-1.5 w-72 bg-raised shadow-lg"
+          >
+            {error}
+          </Alert>
+        )}
+      </div>
     );
   }
 
