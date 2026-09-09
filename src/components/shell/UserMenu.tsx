@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
-import { createClient } from "@/lib/supabase/client";
+import { createClient, variablesPublicasFaltantes } from "@/lib/supabase/client";
 import { Alert, Button, Icon, cn } from "@/components/ui";
 import { ROLE_LABELS } from "@/lib/auth/permissions";
 import { useAuthz } from "@/components/auth/AuthzProvider";
@@ -59,11 +59,14 @@ export function UserMenu() {
       }
       // Sin error el navegador se va a Google: no hay nada que apagar.
     } catch (e) {
-      // createClient() revienta si faltan las variables públicas de
-      // Supabase, y eso pasa antes de cualquier petición.
+      // Mensaje diagnóstico, no genérico: decir "revisa la configuración" sin
+      // decir QUÉ revisar obliga a abrir la consola del navegador.
       console.error("No se pudo iniciar el flujo de sesión:", e);
+      const faltantes = variablesPublicasFaltantes();
       setError(
-        "No se pudo contactar al servicio de autenticación. Revisa la configuración de Supabase.",
+        faltantes.length > 0
+          ? `Faltan variables de entorno en este despliegue: ${faltantes.join(", ")}. Si ya las agregaste, hay que volver a desplegar: se incrustan al compilar.`
+          : `Error al contactar al servicio de autenticación: ${e instanceof Error ? e.message : String(e)}`,
       );
       setBusy(false);
     }
@@ -90,7 +93,7 @@ export function UserMenu() {
           <Alert
             tone="danger"
             title="No se pudo iniciar sesión"
-            className="absolute right-0 top-full z-50 mt-1.5 w-72 bg-raised shadow-lg"
+            className="absolute right-0 top-full z-50 mt-1.5 w-80 bg-raised shadow-lg"
           >
             {error}
           </Alert>

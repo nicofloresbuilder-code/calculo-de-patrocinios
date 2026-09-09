@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import Link from "next/link";
-import { createClient } from "@/lib/supabase/client";
+import { createClient, variablesPublicasFaltantes } from "@/lib/supabase/client";
 import type { EventoInput } from "@/lib/types";
 import { Alert, Button } from "@/components/ui";
 import { Can } from "@/components/auth/Can";
@@ -43,8 +43,11 @@ export function GuardarCotizacion({
     } catch (e) {
       console.error("No se pudo iniciar el flujo de sesión:", e);
       setStatus("error");
+      const faltantes = variablesPublicasFaltantes();
       setError(
-        "No se pudo contactar al servicio de autenticación. Revisa la configuración de Supabase.",
+        faltantes.length > 0
+          ? `Faltan variables de entorno en este despliegue: ${faltantes.join(", ")}. Si ya las agregaste, hay que volver a desplegar: se incrustan al compilar.`
+          : `Error al contactar al servicio de autenticación: ${e instanceof Error ? e.message : String(e)}`,
       );
     }
   }
