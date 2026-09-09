@@ -11,7 +11,13 @@ export interface AuthzContext {
   userId: string | null;
   email: string | null;
   displayName: string | null;
+  /**
+   * Rol de mayor alcance, SOLO para presentación (la etiqueta junto al
+   * nombre). Nunca para decidir accesos: para eso están los permisos.
+   */
   role: RoleName | null;
+  /** Todos los roles asignados. `permissions` es la unión de los suyos. */
+  roles: readonly RoleName[];
   permissions: readonly Permission[];
 }
 
@@ -20,6 +26,7 @@ export const ANONYMOUS: AuthzContext = {
   email: null,
   displayName: null,
   role: null,
+  roles: [],
   permissions: [],
 };
 
@@ -45,7 +52,7 @@ export function canAll(ctx: AuthzContext, permissions: readonly Permission[]): b
  * lo que falta es un permiso nuevo en el catálogo.
  */
 export function hasRole(ctx: AuthzContext, ...roles: readonly RoleName[]): boolean {
-  return ctx.role !== null && roles.includes(ctx.role);
+  return ctx.roles.some((propio) => roles.includes(propio));
 }
 
 export function isAuthenticated(ctx: AuthzContext): boolean {

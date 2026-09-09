@@ -17,7 +17,7 @@ function ctx(role: RoleName): AuthzContext {
     userId: "u-1",
     email: "u@ejemplo.mx",
     displayName: "U",
-    role,
+    roles: [role],
     status: "ACTIVE",
   });
 }
@@ -53,7 +53,7 @@ test("una cuenta desactivada pierde todos sus permisos aunque la sesión siga vi
       userId: "u-1",
       email: "admin@ejemplo.mx",
       displayName: "Admin",
-      role: "SUPER_ADMIN", // el rol más alto
+      roles: ["SUPER_ADMIN"], // el rol más alto
       status,
     });
     assert.equal(c.userId, null, `${status} no debe conservar identidad autorizada`);
@@ -65,7 +65,7 @@ test("una cuenta desactivada pierde todos sus permisos aunque la sesión siga vi
 test("solo ACTIVE conserva los permisos de su rol", () => {
   const c = resolveAuthzContext({
     userId: "u-1", email: "a@b.mx", displayName: "A",
-    role: "ADMIN", status: "ACTIVE",
+    roles: ["ADMIN"], status: "ACTIVE",
   });
   assert.equal(c.role, "ADMIN");
   assert.ok(can(c, "users.view"));
@@ -78,7 +78,7 @@ test("solo ACTIVE conserva los permisos de su rol", () => {
 test("un usuario sin rol asignado no recibe ningún acceso implícito", () => {
   const c = resolveAuthzContext({
     userId: "u-nuevo", email: "nuevo@ejemplo.mx", displayName: "Nuevo",
-    role: null, status: "ACTIVE",
+    roles: [], status: "ACTIVE",
   });
   assert.deepEqual(c.permissions, []);
   for (const p of PERMISSIONS) assert.equal(can(c, p), false);
@@ -86,9 +86,9 @@ test("un usuario sin rol asignado no recibe ningún acceso implícito", () => {
 
 test("una entrada incompleta colapsa a anónimo, nunca a permisivo", () => {
   const casos = [
-    { userId: null, role: "SUPER_ADMIN" as const, status: "ACTIVE" as const },
-    { userId: "u", role: "SUPER_ADMIN" as const, status: null },
-    { userId: "u", role: null, status: "ACTIVE" as const },
+    { userId: null, roles: ["SUPER_ADMIN"] as const, status: "ACTIVE" as const },
+    { userId: "u", roles: ["SUPER_ADMIN"] as const, status: null },
+    { userId: "u", roles: [] as const, status: "ACTIVE" as const },
   ];
   for (const caso of casos) {
     const c = resolveAuthzContext({ email: null, displayName: null, ...caso });
@@ -113,7 +113,7 @@ test("el rol se toma del perfil del servidor, no de lo que mande el cliente", ()
   // entrar: resolveAuthzContext no acepta datos del cliente.
   const perfilDelServidor = {
     userId: "u-1", email: "atacante@ejemplo.mx", displayName: "A",
-    role: "VIEWER" as const, status: "ACTIVE" as const,
+    roles: ["VIEWER"] as const, status: "ACTIVE" as const,
   };
   const cuerpoMalicioso = { role: "SUPER_ADMIN", isAdmin: true, permissions: PERMISSIONS };
   const c = resolveAuthzContext(perfilDelServidor);

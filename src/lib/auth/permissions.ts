@@ -173,3 +173,30 @@ export function statusCanSignIn(status: UserStatus): boolean {
 export function permissionsForRole(role: RoleName): readonly Permission[] {
   return ROLE_PERMISSIONS[role] ?? [];
 }
+
+/**
+ * Permisos de varios roles a la vez: la UNIÓN, sin repetidos.
+ *
+ * Una persona puede tener más de un rol (decisión de Nicolás, 2026-09-09):
+ * alguien puede ser Comercial y además Operaciones y poder hacer lo de los
+ * dos. La tabla `usuario_roles` ya era N:M; esto es lo que hace que la
+ * aplicación respete lo que la base permite en vez de ignorarlo en silencio.
+ */
+export function permissionsForRoles(
+  roles: readonly RoleName[],
+): readonly Permission[] {
+  const union = new Set<Permission>();
+  for (const role of roles) {
+    for (const permiso of permissionsForRole(role)) union.add(permiso);
+  }
+  return [...union];
+}
+
+/**
+ * El rol de mayor alcance de una lista, para PRESENTACIÓN — la etiqueta que
+ * se enseña junto al nombre. No decide accesos: eso siempre sale de los
+ * permisos. `ROLES` está ordenado de mayor a menor alcance.
+ */
+export function rolePrincipal(roles: readonly RoleName[]): RoleName | null {
+  return ROLES.find((r) => roles.includes(r)) ?? null;
+}

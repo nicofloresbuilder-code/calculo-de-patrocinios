@@ -68,6 +68,11 @@ toca ni una línea de UI ni de endpoints.
 | `src/components/auth/Can.tsx` | `<Can permission="…">`. |
 | `src/lib/authz.test.ts` | 12 tests: SUPER_ADMIN tiene todo, anónimo no tiene nada, VIEWER es de solo lectura, la navegación esconde Administración, ningún rol otorga un permiso fuera del catálogo. |
 
+> **Estado (2026-09-09):** implementado. `getAuthzContext()` lee `perfiles` y
+> `usuario_roles`; una persona puede tener varios roles y sus permisos se
+> suman. `AFORO_SUPER_ADMIN_EMAILS` se conserva como válvula de seguridad,
+> comprobada antes de la base.
+
 ### Permisos del catálogo
 
 ```

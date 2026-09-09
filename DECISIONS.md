@@ -594,3 +594,53 @@ que **la página entera** se pudiera desplazar en horizontal a 390 px: al ser
 `position: absolute` sin ancestro posicionado, se escapa del recorte del
 contenedor y estira el ancho del documento. Se cambió por un encabezado
 visible. Vale tenerlo presente para cualquier tabla futura.
+
+---
+
+## 2026-09-09 · Los roles ya salen de la base de datos
+
+Hasta hoy `getAuthzContext()` resolvía el rol por correo:
+`AFORO_SUPER_ADMIN_EMAILS` → SUPER_ADMIN, cualquier otra sesión →
+COMMERCIAL. La tabla `usuario_roles` existía desde 0004 y **no servía para
+nada**: asignar un rol en Supabase no cambiaba lo que la aplicación permitía.
+Eso es peor que no tenerla, porque parece que sí.
+
+Ahora el contexto se arma leyendo `perfiles` (para el `status`) y
+`usuario_roles` (para los roles), con la sesión del propio usuario — RLS ya
+le deja leer lo suyo y nada más, así que no hace falta la llave de servicio.
+
+### Una persona puede tener varios roles
+
+**Decisión de Nicolás**, sobre dos opciones. Alguien puede ser Comercial y
+además Operaciones y poder hacer lo de los dos; los permisos se suman.
+
+La alternativa era un rol por persona, más simple de auditar. Se descartó
+porque `usuario_roles` ya era N:M: con un solo rol, la base permitiría algo
+que la aplicación ignoraría en silencio, que es justo el tipo de desfase que
+después nadie entiende.
+
+`ctx.role` sigue existiendo, pero **solo como etiqueta** — el de mayor
+alcance, para mostrarlo junto al nombre. Los accesos salen siempre de la
+unión de permisos.
+
+### El bootstrap por correo se queda
+
+`AFORO_SUPER_ADMIN_EMAILS` se comprueba **antes** de consultar la base. Ya no
+es un parche por falta de tablas: es la salida de emergencia. Si alguien se
+desactiva a sí mismo, o una migración deja `perfiles` sin administradores
+activos, ese correo es lo único que permite volver a entrar.
+
+### Lo que esto endurece, y a quién puede dejar fuera
+
+Deny by default, ahora de verdad: sin fila en `perfiles`, sin ningún rol
+asignado, o con `status` distinto de ACTIVE, el contexto es ANONYMOUS.
+
+El efecto colateral hay que decirlo: **una cuenta que antes entraba como
+COMMERCIAL por el solo hecho de estar autenticada, ahora no entra** hasta que
+tenga perfil, rol y status ACTIVE. Es lo correcto, pero significa que dar de
+alta a alguien requiere asignarle rol — hoy por SQL, hasta que exista el
+módulo de usuarios.
+
+También se descarta cualquier rol que exista en la base pero no en el
+catálogo del código (`rolesDeAsignaciones`). Crear un rol a mano en SQL no
+abre accesos que nadie revisó.

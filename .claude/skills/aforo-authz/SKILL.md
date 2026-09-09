@@ -112,21 +112,27 @@ Ver `SECURITY-AUDIT.md`, controles #8 y #14, para por qué.
 `console.error` para el detalle técnico, mensaje de producto para la persona.
 Nunca devuelvas el error crudo de Supabase o de Postgres a la interfaz.
 
-## Estado actual — importante antes de tocar autorización
+## Estado actual
 
-`0004_rbac.sql` **ya está aplicada** (perfiles, roles, permisos y
-`tiene_permiso()` existen en la base). Pero `getAuthzContext()` **todavía no
-lee de ahí**: el rol sale del bootstrap por correo
-(`AFORO_SUPER_ADMIN_EMAILS` → SUPER_ADMIN; cualquier otra sesión →
-COMMERCIAL).
+Los roles salen de la **base de datos**: `getAuthzContext()` lee `perfiles`
+(para el `status`) y `usuario_roles` (para los roles), con la sesión del
+propio usuario. Asignar un rol en Supabase sí cambia lo que la aplicación
+permite.
 
-Consecuencias prácticas mientras eso siga así:
+Tres cosas que conviene tener presentes:
 
-1. Asignar un rol en la base **no cambia** lo que la aplicación permite.
-2. Una policy de RLS escrita con `tiene_permiso(auth.uid(), …)` puede negar a
-   un usuario que la aplicación sí considera autorizado. Por eso `eventos`
-   (0008) exige solo sesión iniciada para leer, y el filtro por permiso lo
-   aplica el servidor.
+1. **Una persona puede tener varios roles** y sus permisos se **suman**
+   (`permissionsForRoles`). `ctx.role` es solo la etiqueta que se muestra —
+   el de mayor alcance—; **nunca** decide accesos.
+2. **`AFORO_SUPER_ADMIN_EMAILS` sigue vivo como válvula de seguridad**: se
+   comprueba ANTES de la base, así que si `perfiles` se queda sin
+   administradores, ese correo puede entrar y arreglarlo. No lo quites sin
+   pensarlo.
+3. **Sin fila en `perfiles`, sin rol, o con `status` distinto de ACTIVE, el
+   contexto es ANONYMOUS.** Es deny by default y es intencional: una cuenta
+   nueva no recibe acceso implícito.
 
-Cerrar esa brecha es un cambio contenido: el cuerpo de `getAuthzContext()`.
-Ninguna llamada a `can()` / `requirePermission()` / `<Can>` cambia.
+La RLS de `eventos` (0008) todavía exige solo sesión iniciada en vez de
+`tiene_permiso(auth.uid(), 'events.view')`. Ahora que el rol sale de la
+base, endurecerla ya es posible; hacerlo cuando el módulo de usuarios
+permita asignar roles sin SQL.

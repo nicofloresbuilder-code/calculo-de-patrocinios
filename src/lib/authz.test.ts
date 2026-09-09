@@ -10,6 +10,11 @@ import {
   type RoleName,
 } from "./auth/permissions.ts";
 import { ANONYMOUS, can, canAll, canAny, hasRole, isAuthenticated } from "./auth/can.ts";
+import {
+  esUserStatus,
+  resolveAuthzContext,
+  rolesDeAsignaciones,
+} from "./auth/resolveContext.ts";
 import { isNavItemVisible, visibleNavigation, NAVIGATION } from "./navigation.ts";
 
 function ctxFor(role: RoleName) {
@@ -18,6 +23,7 @@ function ctxFor(role: RoleName) {
     email: "u@ejemplo.mx",
     displayName: "U",
     role,
+    roles: [role],
     permissions: permissionsForRole(role),
   };
 }
@@ -134,5 +140,81 @@ test("todo item de navegación con permisos declara permisos del catálogo", () 
       }
       assert.equal(isNavItemVisible(item, ANONYMOUS), item.href === "/");
     }
+  }
+});
+
+// ═══════════════════════════════════════════════════════════════════════
+// Varios roles por persona (decisión de producto, 2026-09-09)
+// ═══════════════════════════════════════════════════════════════════════
+
+test("dos roles suman sus permisos, sin repetirlos", () => {
+  const c = resolveAuthzContext({
+    userId: "u-1",
+    email: "u@ejemplo.mx",
+    displayName: "U",
+    roles: ["COMMERCIAL", "OPERATIONS"],
+    status: "ACTIVE",
+  });
+
+  // Lo suyo de comercial…
+  assert.ok(can(c, "quotes.create"));
+  // …más lo de operaciones, que comercial no tiene.
+  assert.ok(can(c, "comparables.delete"));
+  // Y nada que ninguno de los dos conceda.
+  assert.equal(can(c, "users.delete"), false);
+
+  assert.equal(new Set(c.permissions).size, c.permissions.length, "sin repetidos");
+});
+
+test("el rol que se muestra es el de mayor alcance, pero no decide accesos", () => {
+  const c = resolveAuthzContext({
+    userId: "u-1",
+    email: "u@ejemplo.mx",
+    displayName: "U",
+    roles: ["VIEWER", "ADMIN", "COMMERCIAL"],
+    status: "ACTIVE",
+  });
+  assert.equal(c.role, "ADMIN", "ADMIN es el de mayor alcance de los tres");
+  // El acceso sigue saliendo de la unión, no de esa etiqueta.
+  assert.ok(can(c, "quotes.create"));
+});
+
+test("hasRole mira todos los roles, no solo el principal", () => {
+  const c = resolveAuthzContext({
+    userId: "u-1",
+    email: "u@ejemplo.mx",
+    displayName: "U",
+    roles: ["ADMIN", "OPERATIONS"],
+    status: "ACTIVE",
+  });
+  assert.ok(hasRole(c, "OPERATIONS"), "OPERATIONS está asignado aunque no sea el principal");
+  assert.equal(hasRole(c, "VIEWER"), false);
+});
+
+// ═══════════════════════════════════════════════════════════════════════
+// Lectura de roles desde la base
+// ═══════════════════════════════════════════════════════════════════════
+
+test("un rol que existe en la base pero no en el catálogo no concede nada", () => {
+  const roles = rolesDeAsignaciones([
+    { roles: { nombre: "ADMIN" } },
+    { roles: { nombre: "DIOS_DEL_SISTEMA" } }, // creado a mano en SQL
+    { roles: null },
+  ]);
+  assert.deepEqual(roles, ["ADMIN"]);
+});
+
+test("no se duplican roles repetidos ni importa la forma del embed", () => {
+  const roles = rolesDeAsignaciones([
+    { roles: [{ nombre: "VIEWER" }, { nombre: "VIEWER" }] },
+    { roles: { nombre: "VIEWER" } },
+  ]);
+  assert.deepEqual(roles, ["VIEWER"]);
+});
+
+test("un status desconocido no se trata como activo", () => {
+  assert.equal(esUserStatus("ACTIVE"), true);
+  for (const basura of ["activo", "", "ADMIN", null, 1]) {
+    assert.equal(esUserStatus(basura), false, `${String(basura)} no es un status válido`);
   }
 });

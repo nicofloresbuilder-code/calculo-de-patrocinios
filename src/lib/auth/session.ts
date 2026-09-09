@@ -3,9 +3,14 @@ import "server-only";
 import { cache } from "react";
 import { createClient } from "@/lib/supabase/server";
 import { supabaseConfigurado } from "@/lib/supabase/cookieOptions";
-import type { Permission, RoleName, UserStatus } from "./permissions";
+import type { Permission } from "./permissions";
 import { ANONYMOUS, can, type AuthzContext } from "./can";
-import { resolveAuthzContext } from "./resolveContext";
+import {
+  resolveAuthzContext,
+  rolesDeAsignaciones,
+  esUserStatus,
+  type AsignacionRol,
+} from "./resolveContext";
 
 /**
  * DATA ACCESS LAYER (DAL) — el único lugar del servidor que resuelve
@@ -30,10 +35,14 @@ import { resolveAuthzContext } from "./resolveContext";
  * variable de entorno SOLO de servidor (sin prefijo NEXT_PUBLIC_, así que
  * nunca llega al bundle del cliente).
  *
- * Es el mecanismo para que exista el primer SUPER_ADMIN antes de que exista
- * la tabla de usuarios — el problema clásico del huevo y la gallina. Cuando
- * la migración de `perfiles` esté aplicada, esta variable se puede vaciar y
- * el rol sale de la base de datos.
+ * Nació para resolver el huevo y la gallina —el primer SUPER_ADMIN antes de
+ * que existiera la tabla de usuarios— y ahora que los roles salen de
+ * `perfiles`/`usuario_roles` se queda como VÁLVULA DE SEGURIDAD: si la base
+ * se queda sin ningún administrador activo (alguien se desactiva a sí mismo,
+ * una migración a medias), esto es lo único que permite volver a entrar.
+ *
+ * Vaciarla es una decisión legítima, pero deja el sistema sin salida de
+ * emergencia. Mantener ahí un solo correo de confianza es lo prudente.
  */
 function bootstrapSuperAdmins(): string[] {
   return (process.env.AFORO_SUPER_ADMIN_EMAILS ?? "")
@@ -43,34 +52,31 @@ function bootstrapSuperAdmins(): string[] {
 }
 
 /**
- * Rol de un usuario autenticado que todavía no tiene fila de perfil.
- *
- * Hoy la tabla `perfiles` no existe (ver DESIGN-SYSTEM.md §RBAC y la
- * propuesta de migración). COMMERCIAL concede exactamente lo que la app ya
- * hacía antes de este cambio: cotizar y guardar tus propias cotizaciones.
- * No abre nada nuevo — en particular, ningún permiso `users.*`, así que el
- * módulo de administración es inalcanzable hasta que la migración exista y
- * alguien tenga un rol que lo incluya.
- */
-const DEFAULT_ROLE: RoleName = "COMMERCIAL";
-
-/**
  * Resuelve el contexto de autorización de la petición actual.
  *
- * Cuando llegue la tabla `perfiles`, el ÚNICO cambio es dentro de esta
- * función: leer el perfil, tomar `role` y `status`, y devolver ANONYMOUS si
- * el status no puede iniciar sesión. Ni una llamada a `getAuthzContext()`
- * cambia.
+ * De dónde sale el rol, en este orden:
+ *
+ *   1. **Bootstrap por correo** (`AFORO_SUPER_ADMIN_EMAILS`) → SUPER_ADMIN
+ *      sin tocar la base. Es la válvula de seguridad: si `perfiles` se
+ *      queda sin ningún administrador, esto es lo que permite volver a
+ *      entrar y arreglarlo. Por eso va ANTES de la consulta.
+ *   2. **`perfiles` + `usuario_roles`**, con la sesión del propio usuario
+ *      (RLS le deja leer su perfil y sus asignaciones, nada más).
+ *
+ * Quien no tenga fila de perfil, no tenga ningún rol asignado, o no esté
+ * ACTIVE, no recibe ningún permiso. Deny by default: la respuesta a "no sé
+ * quién es" nunca es "déjalo pasar".
  */
 export const getAuthzContext = cache(async (): Promise<AuthzContext> => {
   // Sin Supabase configurado por completo no hay sesión posible. Se devuelve
   // anónimo en vez de reventar: fallar cerrado, no caído.
   if (!supabaseConfigurado()) return ANONYMOUS;
 
+  let supabase: Awaited<ReturnType<typeof createClient>>;
   let user: { id: string; email?: string; user_metadata?: Record<string, unknown> } | null =
     null;
   try {
-    const supabase = await createClient();
+    supabase = await createClient();
     const { data } = await supabase.auth.getUser();
     user = data.user ?? null;
   } catch {
@@ -82,31 +88,75 @@ export const getAuthzContext = cache(async (): Promise<AuthzContext> => {
   if (!user) return ANONYMOUS;
 
   const email = user.email?.toLowerCase() ?? null;
-  const role: RoleName =
-    email && bootstrapSuperAdmins().includes(email) ? "SUPER_ADMIN" : DEFAULT_ROLE;
-
   const meta = user.user_metadata ?? {};
-  const fullName =
+  const nombreDeMetadatos =
     typeof meta.full_name === "string"
       ? meta.full_name
       : typeof meta.name === "string"
         ? meta.name
         : null;
 
-  // Sin la tabla `perfiles` no hay estado que consultar todavía; un usuario
-  // autenticado por Supabase se trata como ACTIVE. Cuando la migración
-  // 0004_rbac.sql esté aplicada, `status` y `role` salen de `perfiles` y
-  // `resolveAuthzContext` corta el acceso de las cuentas desactivadas en
-  // cada petición, sin que cambie nada más.
-  const status: UserStatus = "ACTIVE";
+  // ── 1. Válvula de seguridad ──────────────────────────────────────────
+  if (email && bootstrapSuperAdmins().includes(email)) {
+    return resolveAuthzContext({
+      userId: user.id,
+      email: user.email ?? null,
+      displayName: nombreDeMetadatos,
+      roles: ["SUPER_ADMIN"],
+      status: "ACTIVE",
+    });
+  }
 
-  return resolveAuthzContext({
-    userId: user.id,
-    email: user.email ?? null,
-    displayName: fullName,
-    role,
-    status,
-  });
+  // ── 2. Perfil y roles reales ─────────────────────────────────────────
+  try {
+    const [perfilRes, rolesRes] = await Promise.all([
+      supabase
+        .from("perfiles")
+        .select("nombre, apellido, status")
+        .eq("id", user.id)
+        .maybeSingle<{ nombre: string | null; apellido: string | null; status: string }>(),
+      supabase
+        .from("usuario_roles")
+        .select("roles(nombre)")
+        .eq("usuario_id", user.id)
+        .returns<AsignacionRol[]>(),
+    ]);
+
+    if (perfilRes.error || rolesRes.error) {
+      // No se pudo comprobar quién es: se le trata como anónimo. Nunca al
+      // revés.
+      console.error(
+        "No se pudo resolver el perfil de autorización:",
+        perfilRes.error ?? rolesRes.error,
+      );
+      return ANONYMOUS;
+    }
+
+    const perfil = perfilRes.data;
+    if (!perfil) {
+      // Autenticado en Supabase pero sin fila en `perfiles`. Pasa con
+      // cuentas anteriores al trigger de alta de 0004. No se inventa un
+      // rol: hay que crearle el perfil.
+      console.warn("Usuario autenticado sin fila en perfiles:", user.id);
+      return ANONYMOUS;
+    }
+
+    const nombreCompleto =
+      [perfil.nombre, perfil.apellido].filter(Boolean).join(" ").trim() || null;
+
+    return resolveAuthzContext({
+      userId: user.id,
+      email: user.email ?? null,
+      displayName: nombreCompleto ?? nombreDeMetadatos,
+      roles: rolesDeAsignaciones(rolesRes.data ?? []),
+      // Un status que no reconocemos no es ACTIVE: es desconocido, y lo
+      // desconocido no opera.
+      status: esUserStatus(perfil.status) ? perfil.status : null,
+    });
+  } catch (err) {
+    console.error("Error inesperado al resolver la autorización:", err);
+    return ANONYMOUS;
+  }
 });
 
 /** Error de autorización con el status HTTP que le corresponde. */

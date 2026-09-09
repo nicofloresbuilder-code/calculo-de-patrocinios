@@ -19,6 +19,7 @@ function ctxFor(role: RoleName) {
     email: "u@ejemplo.mx",
     displayName: "U",
     role,
+    roles: [role],
     permissions: permissionsForRole(role),
   };
 }
