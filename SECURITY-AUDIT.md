@@ -620,7 +620,7 @@ para un proyecto Next.js — eso en sí es una virtud de seguridad.
 
 | Paquete | Versión | Estado |
 |---|---|---|
-| `next` | 16.3.1 | Al día |
+| `next` | 16.3.4 | Al día (parche de seguridad, ver abajo) |
 | `react` / `react-dom` | 19.2.8 | Al día |
 | `@supabase/supabase-js` | 2.112.3 | Al día |
 | `@supabase/ssr` | 0.12.4 | Al día (ver #9 sobre sus defaults) |
@@ -634,6 +634,28 @@ Menos superficie que auditar.
 
 **No actualicé nada automáticamente.** No hay actualizaciones mayores
 pendientes ni breaking changes que evaluar.
+
+#### Actualización de 2026-09-09 — tres avisos nuevos, ninguno provocado por un cambio del proyecto
+
+`npm audit` pasó a reportar 3 vulnerabilidades (1 crítica, 2 altas) sin que
+cambiara ninguna dependencia: son avisos publicados después de la auditoría
+original, y la rama `main` los tiene igual.
+
+| Paquete | Aviso | Cómo llegaba | Corrección |
+|---|---|---|---|
+| `next` 16.3.1 | RCE sin autenticar en servidores **Windows**; RCE en la API de optimización de imágenes con archivos **AVIF** | dependencia directa | → **16.3.4** |
+| `sharp` 0.35.3 | vulnerabilidades en libheif | transitiva, vía `next` | → 0.35.4 |
+| `js-yaml` 4.3.1 | consumo de CPU sin límite con merge keys vacías | transitiva, vía `eslint` | → 4.3.2 |
+
+**Los dos escenarios de RCE de Next no aplican a este despliegue** —el
+hosting es Linux y no se usa la optimización de imágenes con AVIF—, pero
+16.3.1 → 16.3.4 es un salto de parche dentro de la misma menor, sin cambios
+de API. Se subió por eso: es la corrección barata y correcta, no una
+actualización mayor a ciegas.
+
+Verificado después del salto: `npm audit` en 0, lint, tsc, 85/85 tests,
+build de producción limpio y `next start` sirviendo las rutas con sus
+cabeceras de seguridad intactas.
 
 **Recomendación:** activar Dependabot en GitHub (§7). Es un archivo y da
 alertas continuas en vez de un escaneo puntual.
