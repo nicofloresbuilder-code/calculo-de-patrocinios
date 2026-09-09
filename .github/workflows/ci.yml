@@ -1,0 +1,114 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+# Cancela corridas viejas del mismo PR: solo importa el último commit.
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  verificar:
+    name: Lint · Typecheck · Tests · Build
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: actions/setup-node@v5
+        with:
+          # Node 22 es obligatorio, no una preferencia: los tests corren con
+          # `node --experimental-strip-types`, que no existe en Node 20.
+          node-version: 22
+          cache: npm
+
+      # `npm ci` y no `npm install`: instala exactamente lo que dice
+      # package-lock.json y falla si el lock está desincronizado, en vez de
+      # arreglarlo en silencio.
+      - name: Instalar dependencias
+        run: npm ci
+
+      - name: Lint
+        run: npm run lint
+
+      # `next typegen` ANTES de tsc, no por gusto: Next genera tipos globales
+      # en .next/types (LayoutProps, PageProps…) que el código usa. Sin este
+      # paso, `tsc --noEmit` sobre un checkout limpio falla con
+      # "Cannot find name 'LayoutProps'" — que es justo como se cayó la
+      # primera versión de este workflow.
+      - name: Generar tipos de rutas
+        run: npx next typegen
+
+      - name: Typecheck
+        run: npx tsc --noEmit
+
+      - name: Tests
+        run: npm test
+
+      - name: Build de producción
+        run: npx next build
+
+  dependencias:
+    name: Vulnerabilidades en dependencias
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+
+      # Solo dependencias de producción y solo severidad alta o crítica.
+      # Un aviso `moderate` en una herramienta de desarrollo no debe bloquear
+      # un PR: si el gate grita por todo, se aprende a ignorarlo.
+      - name: npm audit (high y critical)
+        run: npm audit --omit=dev --audit-level=high
+
+  secretos:
+    name: Escaneo de secretos
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          # Historial completo: el objetivo es que un secreto no entre por un
+          # commit intermedio que luego se "arregla" en el siguiente.
+          fetch-depth: 0
+
+      # Mismo escaneo que corrió la auditoría (SECURITY-AUDIT.md #2), pero en
+      # cada PR. Busca VALORES de secreto, no menciones del nombre de la
+      # variable — si no, la propia documentación daría falsos positivos.
+      - name: Buscar valores de secreto en los archivos versionados
+        run: |
+          PATRON='sk-ant-api[0-9]{2}-[A-Za-z0-9_-]{20,}|eyJhbGciOi[A-Za-z0-9_-]+\.eyJ[A-Za-z0-9_-]{20,}|-----BEGIN[A-Z ]*PRIVATE KEY|postgres(ql)?://[a-zA-Z0-9_]+:[^@[:space:]]{8,}@[a-zA-Z0-9.-]+|AKIA[0-9A-Z]{16}|ghp_[A-Za-z0-9]{30,}|xox[baprs]-[A-Za-z0-9-]{10,}'
+          if git grep -nIE "$PATRON" -- . ':!package-lock.json'; then
+            echo "::error::Se encontró algo con forma de secreto. Ver SECURITY-AUDIT.md #2."
+            echo "Si es un falso positivo, ajusta el patrón en .github/workflows/ci.yml."
+            echo "Si es real: NO basta con borrarlo del archivo — hay que ROTAR la credencial."
+            exit 1
+          fi
+          echo "Sin valores de secreto en los archivos versionados."
+
+      - name: Verificar que ningún archivo .env quedó versionado
+        run: |
+          # .env.example es el único permitido, y nunca lleva valores.
+          if git ls-files | grep -E '^\.env' | grep -v '^\.env\.example$'; then
+            echo "::error::Hay un archivo .env versionado. Debe estar en .gitignore."
+            exit 1
+          fi
+          if git show HEAD:.env.example | grep -qE '=[[:space:]]*[^[:space:]#]'; then
+            echo "::error::.env.example tiene valores. Debe llevar solo nombres de variable."
+            exit 1
+          fi
+          echo "Manejo de archivos .env correcto."

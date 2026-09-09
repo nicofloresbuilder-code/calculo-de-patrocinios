@@ -4,6 +4,22 @@ export type CiudadTier = "tier1" | "tier2" | "tier3";
 
 /** Variables de un evento — mismas llaves que la tabla `cotizaciones` en Supabase. */
 export interface EventoInput {
+  /**
+   * Marca a la que se le cotiza. Es DATO COMERCIAL, no variable de precio:
+   * `computePrice()` no la recibe y el número no cambia por escribirla.
+   * Se pide porque una cotización guardada sin destinatario no sirve para
+   * buscarla después.
+   */
+  marca: string;
+  /** Persona de contacto en la marca. Opcional: no siempre se conoce todavía. */
+  contacto: string;
+  /**
+   * Evento del catálogo del que salió esta cotización, si vino de ahí.
+   * Vacío = capturado a mano. NO es variable de precio: el servidor lo usa
+   * para tomar los datos del catálogo (y no los del navegador) antes de
+   * calcular, y para dejar la referencia guardada.
+   */
+  evento_id?: string;
   nombre_evento: string;
   aforo: number;
   dias: number;
@@ -11,7 +27,13 @@ export interface EventoInput {
   exclusiva: boolean;
   activacion: Activacion;
   ciudad_tier: CiudadTier;
-  /** Lado en metros del espacio de activación (5 = 5x5 m). */
+  /**
+   * Si el patrocinio incluye espacio físico de activación. Cuando es `false`
+   * la marca solo tiene presencia (logo, menciones, branding) y no se le
+   * cobra territorio — ver SIN_TERRITORIO_FACTOR en pricing.ts.
+   */
+  tiene_territorio: boolean;
+  /** Lado en metros del espacio de activación (5 = 5x5 m). Se ignora si `tiene_territorio` es false. */
   territorio_lado: number;
   /** Si parte del deal se paga con producto que nosotros vendemos. */
   paga_con_producto: boolean;
@@ -19,13 +41,22 @@ export interface EventoInput {
   monto_producto: number;
 }
 
+export const MARCA_MAX = 120;
+export const CONTACTO_MAX = 120;
 export const AFORO_MAX = 500_000;
 export const DIAS_MAX = 30;
 export const TERRITORIO_MIN = 1;
 export const TERRITORIO_MAX = 30;
 
-/** Tamaños comunes de activación, como atajo. El campo sigue siendo libre. */
-export const TERRITORIO_PRESETS = [2, 5, 10, 15] as const;
+/**
+ * Tamaños comunes de activación, como atajo. El campo sigue siendo libre.
+ *
+ * OJO: esto es solo la botonera de la UI. Las ANCLAS de calibración viven en
+ * `TERRITORIO_ANCLAS` (pricing.ts) y NO cambian con esto — el ancla de 2×2
+ * sigue ahí porque es un precio real que dio Nicolás. Quitar el botón de 2×2
+ * no borra ese dato; un 3×3 simplemente interpola entre las anclas de 2 y 5.
+ */
+export const TERRITORIO_PRESETS = [3, 5, 10, 15] as const;
 
 export const LINEUP_OPTIONS: { value: Lineup; label: string }[] = [
   { value: "A", label: "A · headliner internacional" },
@@ -45,3 +76,37 @@ export const CIUDAD_TIER_OPTIONS: { value: CiudadTier; label: string }[] = [
   { value: "tier2", label: "Tier 2 · capital de estado" },
   { value: "tier3", label: "Tier 3 · resto" },
 ];
+
+// ────────────────────────────────────────────────────────────────────────
+// CATÁLOGO DE EVENTOS
+//
+// Qué es del EVENTO y qué es del DEAL: el evento define aforo, días,
+// line-up y ciudad — no cambian según a quién se le cotice. La
+// exclusividad, el tipo de activación, el territorio y el pago en producto
+// se negocian con cada marca, así que viven en `EventoInput`, no aquí.
+// ────────────────────────────────────────────────────────────────────────
+
+/** Datos que el administrador captura al dar de alta un evento. */
+export interface EventoCatalogoInput {
+  nombre: string;
+  aforo: number;
+  dias: number;
+  lineup: Lineup;
+  /** Nombre de la ciudad. Informativo: lo que entra en la fórmula es el tier. */
+  ciudad: string;
+  ciudad_tier: CiudadTier;
+  /** ISO `YYYY-MM-DD`. Cadena vacía = sin fecha definida todavía. */
+  fecha_inicio: string;
+  notas: string;
+}
+
+/** Fila del catálogo tal como se lee de la base. */
+export interface EventoCatalogo extends EventoCatalogoInput {
+  id: string;
+  activo: boolean;
+  creado_en: string;
+}
+
+export const EVENTO_NOMBRE_MAX = 120;
+export const CIUDAD_MAX = 80;
+export const NOTAS_MAX = 500;

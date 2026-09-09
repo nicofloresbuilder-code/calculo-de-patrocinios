@@ -1,13 +1,15 @@
 import {
   ACTIVACION_OPTIONS,
   AFORO_MAX,
+  CONTACTO_MAX,
   CIUDAD_TIER_OPTIONS,
   DIAS_MAX,
   LINEUP_OPTIONS,
+  MARCA_MAX,
   TERRITORIO_MAX,
   TERRITORIO_MIN,
   type EventoInput,
-} from "./types";
+} from "./types.ts";
 
 export type EventoErrors = Partial<Record<keyof EventoInput, string>>;
 
@@ -26,6 +28,19 @@ function isPositiveInt(v: number) {
  */
 export function validateEvento(input: EventoInput): EventoErrors {
   const errors: EventoErrors = {};
+
+  // La marca es obligatoria: una cotización guardada sin destinatario no se
+  // puede buscar ni auditar después. El contacto es opcional a propósito —
+  // muchas veces se cotiza antes de saber con quién se va a tratar.
+  if (!input.marca.trim()) {
+    errors.marca = "Indica a qué marca se le cotiza.";
+  } else if (input.marca.trim().length > MARCA_MAX) {
+    errors.marca = `Máximo ${MARCA_MAX} caracteres.`;
+  }
+
+  if (input.contacto.trim().length > CONTACTO_MAX) {
+    errors.contacto = `Máximo ${CONTACTO_MAX} caracteres.`;
+  }
 
   if (!input.nombre_evento.trim()) {
     errors.nombre_evento = "El nombre del evento es requerido.";
@@ -57,7 +72,11 @@ export function validateEvento(input: EventoInput): EventoErrors {
     errors.ciudad_tier = "Selecciona una ciudad/tier válida.";
   }
 
-  if (!Number.isFinite(input.territorio_lado) || input.territorio_lado <= 0) {
+  // El territorio solo se valida cuando el patrocinio lo incluye. Antes era
+  // obligatorio siempre, y eso bloqueaba las cotizaciones de solo presencia.
+  if (!input.tiene_territorio) {
+    // sin espacio físico no hay medida que validar
+  } else if (!Number.isFinite(input.territorio_lado) || input.territorio_lado <= 0) {
     errors.territorio_lado = "El territorio debe ser mayor a 0.";
   } else if (input.territorio_lado < TERRITORIO_MIN) {
     errors.territorio_lado = `Mínimo ${TERRITORIO_MIN}×${TERRITORIO_MIN} m.`;

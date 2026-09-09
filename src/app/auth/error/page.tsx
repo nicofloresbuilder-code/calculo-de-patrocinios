@@ -1,15 +1,24 @@
-import Link from "next/link";
+import { Alert, Card, LinkButton } from "@/components/ui";
+import { PageBody } from "@/components/shell";
+
+export const metadata = { title: "No se pudo iniciar sesión" };
 
 export default function AuthErrorPage() {
   return (
-    <div className="flex flex-1 flex-col items-center justify-center gap-2 bg-aforo-bg p-10 text-center text-aforo-fg">
-      <h1 className="font-serif text-2xl font-bold">No se pudo iniciar sesión</h1>
-      <p className="text-sm text-aforo-fg-muted">
-        Intenta de nuevo desde la pantalla principal.
-      </p>
-      <Link href="/" className="mt-2 text-sm text-aforo-accent underline">
-        Volver a Aforo
-      </Link>
-    </div>
+    <PageBody>
+      <div className="mx-auto max-w-lg pt-10">
+        <Card title="Inicio de sesión">
+          <Alert tone="danger" title="No se pudo iniciar sesión">
+            El proveedor rechazó la autenticación o el enlace expiró. Vuelve a
+            intentarlo desde la pantalla principal.
+          </Alert>
+          <div className="mt-4">
+            <LinkButton href="/" variant="primary" size="sm" icon="chevronLeft">
+              Volver a Aforo
+            </LinkButton>
+          </div>
+        </Card>
+      </div>
+    </PageBody>
   );
 }

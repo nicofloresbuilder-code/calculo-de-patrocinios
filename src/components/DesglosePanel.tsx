@@ -25,22 +25,34 @@ export function DesglosePanel({
 }: {
   desglose: Record<keyof PriceFactors, number>;
 }) {
+  // Un factor en 1.0 aporta 0% — es correcto, pero leído como "0%" parece un
+  // error de cálculo. Se etiqueta como neutro para que se entienda que la
+  // variable está en su valor de referencia, no que no importe.
   return (
-    <div className="space-y-4">
-      {ORDER.map((key, i) => (
-        <div key={key} className="flex items-center gap-4">
-          <span className="w-28 shrink-0 text-sm text-aforo-fg">{LABELS[key]}</span>
-          <div className="h-2 flex-1 overflow-hidden rounded-full bg-aforo-input">
-            <div
-              className={`h-full rounded-full ${i % 2 === 0 ? "bg-aforo-accent" : "bg-aforo-teal"}`}
-              style={{ width: `${Math.min(desglose[key], 100)}%` }}
-            />
-          </div>
-          <span className="w-10 shrink-0 text-right text-sm text-aforo-fg-muted">
-            {desglose[key]}%
-          </span>
-        </div>
-      ))}
-    </div>
+    <ul className="space-y-3">
+      {ORDER.map((key) => {
+        const valor = desglose[key];
+        return (
+          <li key={key} className="flex items-center gap-3">
+            <span className="w-24 shrink-0 truncate text-xs text-fg-muted">
+              {LABELS[key]}
+            </span>
+            <div className="h-1.5 flex-1 overflow-hidden rounded-full bg-line-subtle">
+              <div
+                className="h-full rounded-full bg-primary"
+                style={{ width: `${Math.min(valor, 100)}%` }}
+              />
+            </div>
+            <span className="w-16 shrink-0 text-right text-xs text-fg">
+              {valor === 0 ? (
+                <span className="text-fg-subtle">neutro</span>
+              ) : (
+                `${valor}%`
+              )}
+            </span>
+          </li>
+        );
+      })}
+    </ul>
   );
 }

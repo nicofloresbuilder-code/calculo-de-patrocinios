@@ -5,16 +5,31 @@ import {
   ACTIVACION_OPTIONS,
   AFORO_MAX,
   CIUDAD_TIER_OPTIONS,
+  CONTACTO_MAX,
   DIAS_MAX,
   LINEUP_OPTIONS,
+  MARCA_MAX,
   TERRITORIO_MAX,
   TERRITORIO_MIN,
   TERRITORIO_PRESETS,
+  type EventoCatalogo,
   type EventoInput,
 } from "@/lib/types";
 import { validateEvento, type EventoErrors } from "@/lib/validateEvento";
+import {
+  Alert,
+  Button,
+  Checkbox,
+  Field,
+  Input,
+  SegmentedControl,
+  Select,
+} from "@/components/ui";
 
 const initialForm: EventoInput = {
+  evento_id: "",
+  marca: "",
+  contacto: "",
   nombre_evento: "",
   aforo: 0,
   dias: 1,
@@ -22,29 +37,70 @@ const initialForm: EventoInput = {
   exclusiva: false,
   activacion: "oficial",
   ciudad_tier: "tier1",
+  tiene_territorio: true,
   territorio_lado: 5,
   paga_con_producto: false,
   monto_producto: 0,
 };
 
-const inputClass =
-  "w-full rounded-md border border-aforo-panel-border bg-aforo-input px-3 py-2.5 text-sm text-aforo-fg outline-none focus:border-aforo-accent";
-const labelClass = "mb-1.5 block text-xs text-aforo-fg-muted";
-const errorClass = "mt-1 text-xs text-red-400";
+const TERRITORIO_OPTIONS = TERRITORIO_PRESETS.map((lado) => ({
+  value: lado as number,
+  label: `${lado}×${lado}`,
+}));
+
+const numberFmt = new Intl.NumberFormat("es-MX");
+
+const LINEUP_LABEL = new Map(LINEUP_OPTIONS.map((o) => [o.value, o.label]));
+// Solo la etiqueta corta ("Tier 1"): la lista de ciudades de ejemplo sirve
+// para elegir en el select, no para describir un evento ya elegido.
+const TIER_CORTO = new Map(
+  CIUDAD_TIER_OPTIONS.map((o) => [o.value, o.label.split("·")[0].trim()]),
+);
 
 export function EventoForm({
   onSubmit,
+  eventos = [],
 }: {
   onSubmit?: (evento: EventoInput) => void;
+  /** Catálogo de eventos vigentes. Vacío = solo captura a mano. */
+  eventos?: readonly EventoCatalogo[];
 }) {
   const [form, setForm] = useState<EventoInput>(initialForm);
   const [errors, setErrors] = useState<EventoErrors>({});
   const [touched, setTouched] = useState(false);
 
-  function handleChange<K extends keyof EventoInput>(key: K, value: EventoInput[K]) {
-    const next = { ...form, [key]: value };
+  function actualizar(next: EventoInput) {
     setForm(next);
+    // Solo se revalida en vivo después del primer intento: no se le grita al
+    // usuario mientras todavía está escribiendo el primer campo.
     if (touched) setErrors(validateEvento(next));
+  }
+
+  function handleChange<K extends keyof EventoInput>(key: K, value: EventoInput[K]) {
+    actualizar({ ...form, [key]: value });
+  }
+
+  /**
+   * Elegir un evento del catálogo llena sus datos de golpe. Se copian al
+   * formulario (en vez de solo guardar el id) para que el precio se pueda
+   * calcular sin ir al servidor; al guardar, el servidor vuelve a leerlos
+   * del catálogo y esa es la versión que manda.
+   */
+  function seleccionarEvento(id: string) {
+    const evento = eventos.find((e) => e.id === id);
+    if (!evento) {
+      actualizar({ ...form, evento_id: "" });
+      return;
+    }
+    actualizar({
+      ...form,
+      evento_id: evento.id,
+      nombre_evento: evento.nombre,
+      aforo: evento.aforo,
+      dias: evento.dias,
+      lineup: evento.lineup,
+      ciudad_tier: evento.ciudad_tier,
+    });
   }
 
   function handleSubmit(e: FormEvent) {
@@ -53,218 +109,299 @@ export function EventoForm({
     const currentErrors = validateEvento(form);
     setErrors(currentErrors);
     if (Object.keys(currentErrors).length > 0) return;
-
-    // Commit 3: todavía sin fórmula — solo se loguea el objeto.
-    console.log("Evento a cotizar:", form);
     onSubmit?.(form);
   }
 
+  const errorCount = touched ? Object.keys(errors).length : 0;
+  const seleccionado = eventos.find((e) => e.id === form.evento_id) ?? null;
+
   return (
     <form onSubmit={handleSubmit} noValidate className="space-y-4">
-      <div>
-        <label className={labelClass} htmlFor="nombre_evento">
-          Nombre del evento
-        </label>
-        <input
-          id="nombre_evento"
-          type="text"
-          className={inputClass}
-          value={form.nombre_evento}
-          maxLength={120}
-          placeholder="Ej. Ultra México 2026"
-          onChange={(e) => handleChange("nombre_evento", e.target.value)}
-        />
-        {errors.nombre_evento && <p className={errorClass}>{errors.nombre_evento}</p>}
-      </div>
+      <Field
+        label="Marca"
+        error={errors.marca}
+        hint={form.marca.trim() ? undefined : "A quién se le envía esta cotización."}
+      >
+        {(p) => (
+          <Input
+            {...p}
+            type="text"
+            value={form.marca}
+            maxLength={MARCA_MAX}
+            placeholder="Ej. Michelob Ultra"
+            autoComplete="organization"
+            onChange={(e) => handleChange("marca", e.target.value)}
+          />
+        )}
+      </Field>
 
-      <div>
-        <label className={labelClass} htmlFor="aforo">
-          Aforo (capacidad)
-        </label>
-        <input
-          id="aforo"
-          type="number"
-          className={inputClass}
-          value={form.aforo || ""}
-          min={1}
-          max={AFORO_MAX}
-          step={1}
-          placeholder="45,000"
-          onChange={(e) => handleChange("aforo", Math.trunc(Number(e.target.value)))}
-        />
-        {errors.aforo && <p className={errorClass}>{errors.aforo}</p>}
-      </div>
+      <Field label="Contacto (opcional)" error={errors.contacto}>
+        {(p) => (
+          <Input
+            {...p}
+            type="text"
+            value={form.contacto}
+            maxLength={CONTACTO_MAX}
+            placeholder="Ej. Ana Rodríguez"
+            autoComplete="name"
+            onChange={(e) => handleChange("contacto", e.target.value)}
+          />
+        )}
+      </Field>
 
-      <div>
-        <label className={labelClass} htmlFor="dias">
-          Duración (días)
-        </label>
-        <input
-          id="dias"
-          type="number"
-          className={inputClass}
-          value={form.dias || ""}
-          min={1}
-          max={DIAS_MAX}
-          step={1}
-          onChange={(e) => handleChange("dias", Math.trunc(Number(e.target.value)))}
-        />
-        {errors.dias && <p className={errorClass}>{errors.dias}</p>}
-      </div>
-
-      <div>
-        <label className={labelClass} htmlFor="lineup">
-          Caliber del line-up
-        </label>
-        <select
-          id="lineup"
-          className={inputClass}
-          value={form.lineup}
-          onChange={(e) => handleChange("lineup", e.target.value as EventoInput["lineup"])}
-        >
-          {LINEUP_OPTIONS.map((o) => (
-            <option key={o.value} value={o.value}>
-              {o.label}
-            </option>
-          ))}
-        </select>
-      </div>
-
-      <div className="flex items-center justify-between rounded-md border border-aforo-panel-border bg-aforo-input px-3 py-2.5">
-        <label htmlFor="exclusiva" className="text-sm text-aforo-fg">
-          Exclusividad de categoría
-        </label>
-        <input
-          id="exclusiva"
-          type="checkbox"
-          className="h-4 w-4 accent-aforo-accent"
-          checked={form.exclusiva}
-          onChange={(e) => handleChange("exclusiva", e.target.checked)}
-        />
-      </div>
-
-      <div>
-        <label className={labelClass} htmlFor="activacion">
-          Tipo de activación
-        </label>
-        <select
-          id="activacion"
-          className={inputClass}
-          value={form.activacion}
-          onChange={(e) =>
-            handleChange("activacion", e.target.value as EventoInput["activacion"])
+      {eventos.length > 0 && (
+        <Field
+          label="Evento"
+          hint={
+            seleccionado
+              ? undefined
+              : "Elige uno del catálogo o captura los datos a mano abajo."
           }
         >
-          {ACTIVACION_OPTIONS.map((o) => (
-            <option key={o.value} value={o.value}>
-              {o.label}
-            </option>
-          ))}
-        </select>
-      </div>
-
-      <div>
-        <label className={labelClass} htmlFor="ciudad_tier">
-          Ciudad / venue
-        </label>
-        <select
-          id="ciudad_tier"
-          className={inputClass}
-          value={form.ciudad_tier}
-          onChange={(e) =>
-            handleChange("ciudad_tier", e.target.value as EventoInput["ciudad_tier"])
-          }
-        >
-          {CIUDAD_TIER_OPTIONS.map((o) => (
-            <option key={o.value} value={o.value}>
-              {o.label}
-            </option>
-          ))}
-        </select>
-      </div>
-
-      <div>
-        <label className={labelClass} htmlFor="territorio_lado">
-          Territorio de la activación
-        </label>
-        <div className="mb-2 flex gap-1.5">
-          {TERRITORIO_PRESETS.map((lado) => (
-            <button
-              key={lado}
-              type="button"
-              onClick={() => handleChange("territorio_lado", lado)}
-              className={`flex-1 rounded-md border px-2 py-1.5 text-xs transition-colors ${
-                form.territorio_lado === lado
-                  ? "border-aforo-accent bg-aforo-accent/15 text-aforo-accent"
-                  : "border-aforo-panel-border bg-aforo-input text-aforo-fg-muted hover:border-aforo-accent/50"
-              }`}
-            >
-              {lado}×{lado}
-            </button>
-          ))}
-        </div>
-        <div className="flex items-center gap-2">
-          <input
-            id="territorio_lado"
-            type="number"
-            className={inputClass}
-            value={form.territorio_lado || ""}
-            min={TERRITORIO_MIN}
-            max={TERRITORIO_MAX}
-            step={0.5}
-            onChange={(e) => handleChange("territorio_lado", Number(e.target.value))}
-          />
-          <span className="whitespace-nowrap text-xs text-aforo-fg-muted">
-            m por lado · {(form.territorio_lado || 0) ** 2} m²
-          </span>
-        </div>
-        {errors.territorio_lado && <p className={errorClass}>{errors.territorio_lado}</p>}
-      </div>
-
-      <div className="space-y-3 rounded-md border border-aforo-panel-border bg-aforo-input/50 p-3">
-        <div className="flex items-center justify-between">
-          <label htmlFor="paga_con_producto" className="text-sm text-aforo-fg">
-            Paga parte con producto
-          </label>
-          <input
-            id="paga_con_producto"
-            type="checkbox"
-            className="h-4 w-4 accent-aforo-accent"
-            checked={form.paga_con_producto}
-            onChange={(e) => handleChange("paga_con_producto", e.target.checked)}
-          />
-        </div>
-
-        {form.paga_con_producto && (
-          <div>
-            <label className={labelClass} htmlFor="monto_producto">
-              ¿Cuánto del deal llega en producto?
-            </label>
-            <input
-              id="monto_producto"
-              type="number"
-              className={inputClass}
-              value={form.monto_producto || ""}
-              min={0}
-              step={10_000}
-              placeholder="500,000"
-              onChange={(e) => handleChange("monto_producto", Number(e.target.value))}
+          {(p) => (
+            <Select
+              {...p}
+              options={eventos.map((e) => ({ value: e.id, label: e.nombre }))}
+              placeholder="Capturar a mano"
+              value={form.evento_id ?? ""}
+              onChange={(e) => seleccionarEvento(e.target.value)}
             />
-            <p className="mt-1 text-xs text-aforo-fg-muted">
-              A valor declarado por la marca. Abajo verás si de verdad se puede
-              hacer líquido.
-            </p>
-            {errors.monto_producto && <p className={errorClass}>{errors.monto_producto}</p>}
+          )}
+        </Field>
+      )}
+
+      {seleccionado ? (
+        // Los datos del evento vienen del catálogo: se muestran, no se
+        // reescriben. Editarlos aquí crearía dos versiones del mismo evento.
+        <div className="rounded-md border border-line-subtle bg-sunken p-3">
+          <dl className="grid grid-cols-2 gap-x-3 gap-y-2 text-xs">
+            <div className="col-span-2">
+              <dt className="text-fg-subtle">Evento</dt>
+              <dd className="font-medium text-fg">{seleccionado.nombre}</dd>
+            </div>
+            <div>
+              <dt className="text-fg-subtle">Aforo</dt>
+              <dd className="text-fg">{numberFmt.format(seleccionado.aforo)}</dd>
+            </div>
+            <div>
+              <dt className="text-fg-subtle">Duración</dt>
+              <dd className="text-fg">
+                {seleccionado.dias} {seleccionado.dias === 1 ? "día" : "días"}
+              </dd>
+            </div>
+            <div className="col-span-2">
+              <dt className="text-fg-subtle">Line-up</dt>
+              <dd className="text-fg">
+                {LINEUP_LABEL.get(seleccionado.lineup) ?? seleccionado.lineup}
+              </dd>
+            </div>
+            <div className="col-span-2">
+              <dt className="text-fg-subtle">Ciudad</dt>
+              <dd className="text-fg">
+                {seleccionado.ciudad
+                  ? `${seleccionado.ciudad} · ${TIER_CORTO.get(seleccionado.ciudad_tier) ?? ""}`
+                  : (TIER_CORTO.get(seleccionado.ciudad_tier) ?? seleccionado.ciudad_tier)}
+              </dd>
+            </div>
+          </dl>
+          <Button
+            variant="ghost"
+            size="sm"
+            className="mt-2"
+            onClick={() => handleChange("evento_id", "")}
+          >
+            Capturar a mano
+          </Button>
+        </div>
+      ) : (
+        <>
+          <Field label="Nombre del evento" error={errors.nombre_evento}>
+            {(p) => (
+              <Input
+                {...p}
+                type="text"
+                value={form.nombre_evento}
+                maxLength={120}
+                placeholder="Ej. Ultra México 2026"
+                onChange={(e) => handleChange("nombre_evento", e.target.value)}
+              />
+            )}
+          </Field>
+
+          <div className="grid grid-cols-2 gap-3">
+            <Field label="Aforo" error={errors.aforo}>
+              {(p) => (
+                <Input
+                  {...p}
+                  type="number"
+                  inputMode="numeric"
+                  value={form.aforo || ""}
+                  min={1}
+                  max={AFORO_MAX}
+                  step={1}
+                  placeholder="45000"
+                  onChange={(e) =>
+                    handleChange("aforo", Math.trunc(Number(e.target.value)))
+                  }
+                />
+              )}
+            </Field>
+
+            <Field label="Duración (días)" error={errors.dias}>
+              {(p) => (
+                <Input
+                  {...p}
+                  type="number"
+                  inputMode="numeric"
+                  value={form.dias || ""}
+                  min={1}
+                  max={DIAS_MAX}
+                  step={1}
+                  onChange={(e) =>
+                    handleChange("dias", Math.trunc(Number(e.target.value)))
+                  }
+                />
+              )}
+            </Field>
           </div>
+
+          <Field label="Calibre del line-up" error={errors.lineup}>
+            {(p) => (
+              <Select
+                {...p}
+                options={LINEUP_OPTIONS}
+                value={form.lineup}
+                onChange={(e) =>
+                  handleChange("lineup", e.target.value as EventoInput["lineup"])
+                }
+              />
+            )}
+          </Field>
+
+          <Field label="Ciudad / venue" error={errors.ciudad_tier}>
+            {(p) => (
+              <Select
+                {...p}
+                options={CIUDAD_TIER_OPTIONS}
+                value={form.ciudad_tier}
+                onChange={(e) =>
+                  handleChange(
+                    "ciudad_tier",
+                    e.target.value as EventoInput["ciudad_tier"],
+                  )
+                }
+              />
+            )}
+          </Field>
+        </>
+      )}
+
+      <Field label="Tipo de activación" error={errors.activacion}>
+        {(p) => (
+          <Select
+            {...p}
+            options={ACTIVACION_OPTIONS}
+            value={form.activacion}
+            onChange={(e) =>
+              handleChange("activacion", e.target.value as EventoInput["activacion"])
+            }
+          />
+        )}
+      </Field>
+
+      <Checkbox
+        label="Exclusividad de categoría"
+        checked={form.exclusiva}
+        onCheckedChange={(v) => handleChange("exclusiva", v)}
+      />
+
+      <div className="space-y-3 rounded-md border border-line-subtle p-3">
+        <Checkbox
+          label="Incluye espacio de activación"
+          checked={form.tiene_territorio}
+          onCheckedChange={(v) => handleChange("tiene_territorio", v)}
+          hint={
+            form.tiene_territorio
+              ? undefined
+              : "Solo presencia: logo, menciones y branding, sin espacio físico."
+          }
+        />
+
+        {form.tiene_territorio ? (
+          <>
+            <Field
+              label="Territorio de la activación"
+              error={errors.territorio_lado}
+              suffix={`m por lado · ${(form.territorio_lado || 0) ** 2} m²`}
+            >
+              {(p) => (
+                <Input
+                  {...p}
+                  type="number"
+                  inputMode="decimal"
+                  value={form.territorio_lado || ""}
+                  min={TERRITORIO_MIN}
+                  max={TERRITORIO_MAX}
+                  step={0.5}
+                  onChange={(e) => handleChange("territorio_lado", Number(e.target.value))}
+                />
+              )}
+            </Field>
+            {/* Atajos a los tamaños habituales; el campo de arriba sigue libre */}
+            <SegmentedControl
+              label="Tamaños de activación habituales"
+              options={TERRITORIO_OPTIONS}
+              value={form.territorio_lado}
+              onChange={(lado) => handleChange("territorio_lado", lado)}
+            />
+          </>
+        ) : (
+          <Alert tone="info" title="Precio de solo presencia">
+            Calibrado con un deal real: vale el 84% de una activación de 5×5.
+            Ojo — con los datos actuales sale más caro que un stand de 2×2 o
+            3×3, lo cual sigue en revisión.
+          </Alert>
         )}
       </div>
 
-      <button
-        type="submit"
-        className="w-full rounded-md bg-aforo-accent px-4 py-2.5 text-sm font-semibold text-aforo-bg transition-colors hover:brightness-110"
-      >
+      <div className="space-y-3 rounded-md border border-line-subtle p-3">
+        <Checkbox
+          label="Paga parte con producto"
+          checked={form.paga_con_producto}
+          onCheckedChange={(v) => handleChange("paga_con_producto", v)}
+        />
+        {form.paga_con_producto && (
+          <Field
+            label="¿Cuánto del deal llega en producto?"
+            error={errors.monto_producto}
+            hint="A valor declarado por la marca. Abajo verás si de verdad se puede hacer líquido."
+          >
+            {(p) => (
+              <Input
+                {...p}
+                type="number"
+                inputMode="numeric"
+                value={form.monto_producto || ""}
+                min={0}
+                step={10_000}
+                placeholder="500000"
+                onChange={(e) => handleChange("monto_producto", Number(e.target.value))}
+              />
+            )}
+          </Field>
+        )}
+      </div>
+
+      <Button type="submit" variant="primary" size="lg" block>
         Calcular rango sugerido
-      </button>
+      </Button>
+
+      {/* Resumen de validación anunciado a lectores de pantalla (WCAG 4.1.3) */}
+      <p role="status" aria-live="polite" className="sr-only">
+        {errorCount > 0
+          ? `El formulario tiene ${errorCount} ${errorCount === 1 ? "error" : "errores"}.`
+          : ""}
+      </p>
     </form>
   );
 }

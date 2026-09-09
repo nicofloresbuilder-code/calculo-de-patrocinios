@@ -1,111 +1,156 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import Link from "next/link";
-import { createClient } from "@/lib/supabase/client";
+import { createClient, variablesPublicasFaltantes } from "@/lib/supabase/client";
 import type { EventoInput } from "@/lib/types";
-import type { ComputePriceResult } from "@/lib/pricing";
+import { Alert, Button } from "@/components/ui";
+import { Can } from "@/components/auth/Can";
+import { useAuthz } from "@/components/auth/AuthzProvider";
 
-type Status = "checking" | "signed-out" | "idle" | "saving" | "saved" | "error";
+type Status = "idle" | "saving" | "saved" | "error";
 
 export function GuardarCotizacion({
   evento,
-  resultado,
   narrativa,
 }: {
   evento: EventoInput;
-  resultado: ComputePriceResult;
+  /** Racional generado por la IA. Opcional: la cotización se guarda sin él. */
   narrativa: string | null;
 }) {
-  const supabaseConfigured = Boolean(process.env.NEXT_PUBLIC_SUPABASE_URL);
-  const [status, setStatus] = useState<Status>(
-    supabaseConfigured ? "checking" : "signed-out",
-  );
+  // La sesión ya la resolvió el servidor y bajó por contexto. Antes este
+  // componente volvía a preguntarle a Supabase desde el cliente, lo que
+  // costaba un round-trip y hacía parpadear el botón.
+  const ctx = useAuthz();
+  const [status, setStatus] = useState<Status>("idle");
   const [error, setError] = useState<string | null>(null);
 
-  useEffect(() => {
-    if (!supabaseConfigured) return;
-    const supabase = createClient();
-    supabase.auth.getUser().then(({ data }) => {
-      setStatus(data.user ? "idle" : "signed-out");
-    });
-  }, [supabaseConfigured]);
+  // Mismo criterio que en el topbar: un login que falla en silencio deja al
+  // usuario sin nada que hacer ni que reportar.
+  async function signIn() {
+    setError(null);
+    try {
+      const supabase = createClient();
+      const { error: err } = await supabase.auth.signInWithOAuth({
+        provider: "google",
+        options: { redirectTo: `${window.location.origin}/auth/callback` },
+      });
+      if (err) {
+        console.error("Error al iniciar sesión con Google:", err);
+        setStatus("error");
+        setError(err.message);
+      }
+    } catch (e) {
+      console.error("No se pudo iniciar el flujo de sesión:", e);
+      setStatus("error");
+      const faltantes = variablesPublicasFaltantes();
+      setError(
+        faltantes.length > 0
+          ? `Faltan variables de entorno en este despliegue: ${faltantes.join(", ")}. Si ya las agregaste, hay que volver a desplegar: se incrustan al compilar.`
+          : `Error al contactar al servicio de autenticación: ${e instanceof Error ? e.message : String(e)}`,
+      );
+    }
+  }
 
   async function handleGuardar() {
     setStatus("saving");
     setError(null);
 
-    const supabase = createClient();
-    const { data: userData } = await supabase.auth.getUser();
-    if (!userData.user) {
-      setStatus("signed-out");
-      return;
-    }
+    // El guardado pasa por el servidor, no por el cliente de Supabase.
+    // Motivo: antes el navegador escribía `precio_min/objetivo/max` y
+    // `desglose` directamente en la tabla. RLS impedía escribir en el
+    // renglón de otro usuario, pero no impedía guardar CUALQUIER precio —
+    // y todo el valor del producto depende de que la cifra guardada sea la
+    // que produjo la fórmula. Ahora el servidor la recalcula.
+    //
+    // Solo se mandan las variables del evento. El precio ni siquiera se
+    // envía: el servidor lo ignoraría.
+    try {
+      const res = await fetch("/api/cotizaciones", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ evento, racional: narrativa }),
+      });
 
-    // RLS exige auth.uid() = user_id — se manda explícito, no implícito.
-    const { error: insertError } = await supabase.from("cotizaciones").insert({
-      user_id: userData.user.id,
-      nombre_evento: evento.nombre_evento,
-      aforo: evento.aforo,
-      dias: evento.dias,
-      lineup: evento.lineup,
-      exclusiva: evento.exclusiva,
-      activacion: evento.activacion,
-      ciudad_tier: evento.ciudad_tier,
-      // Requieren la migración 0002_territorio_producto.sql.
-      territorio_lado: evento.territorio_lado,
-      paga_con_producto: evento.paga_con_producto,
-      monto_producto: evento.paga_con_producto ? evento.monto_producto : null,
-      precio_min: resultado.min,
-      precio_objetivo: resultado.objetivo,
-      precio_max: resultado.max,
-      desglose: resultado.desglose,
-      racional: narrativa,
-    });
-
-    if (insertError) {
+      if (!res.ok) {
+        const body = (await res.json().catch(() => null)) as { error?: string } | null;
+        setStatus("error");
+        setError(
+          res.status === 429
+            ? "Demasiadas cotizaciones seguidas. Espera un momento."
+            : (body?.error ?? "No se pudo guardar la cotización."),
+        );
+        return;
+      }
+      setStatus("saved");
+    } catch {
       setStatus("error");
-      setError(insertError.message);
-      return;
+      setError("No se pudo guardar la cotización. Revisa tu conexión.");
     }
-    setStatus("saved");
   }
 
-  if (status === "checking") return null;
-
-  if (status === "signed-out") {
+  if (!ctx.userId) {
     return (
-      <p className="text-xs text-aforo-fg-muted">
-        Inicia sesión con Google (arriba a la derecha) para guardar esta
-        cotización.
-      </p>
+      <div className="space-y-3">
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <p className="text-xs text-fg-subtle">
+            Inicia sesión para guardar esta cotización y consultarla después.
+          </p>
+          <Button size="sm" onClick={signIn}>
+            Iniciar sesión
+          </Button>
+        </div>
+        {error && (
+          <Alert tone="danger" title="No se pudo iniciar sesión">
+            {error}
+          </Alert>
+        )}
+      </div>
     );
   }
 
   if (status === "saved") {
     return (
-      <p className="text-xs text-aforo-teal">
-        Cotización guardada. Ver en{" "}
-        <Link href="/cotizaciones" className="underline">
-          Mis cotizaciones
-        </Link>
-        .
-      </p>
+      <Alert
+        tone="success"
+        title="Cotización guardada"
+        action={
+          <Link
+            href="/cotizaciones"
+            className="text-xs font-medium text-success underline underline-offset-2"
+          >
+            Ver todas
+          </Link>
+        }
+      />
     );
   }
 
   return (
-    <div className="flex items-center gap-3">
-      <button
-        onClick={handleGuardar}
-        disabled={status === "saving"}
-        className="rounded-md border border-aforo-panel-border bg-aforo-input px-3 py-1.5 text-xs text-aforo-fg transition-colors hover:border-aforo-accent disabled:opacity-50"
-      >
-        {status === "saving" ? "Guardando…" : "Guardar cotización"}
-      </button>
-      {status === "error" && (
-        <span className="text-xs text-red-400">{error}</span>
-      )}
-    </div>
+    <Can
+      permission="quotes.create"
+      fallback={
+        <p className="text-xs text-fg-subtle">
+          Tu rol no permite guardar cotizaciones.
+        </p>
+      }
+    >
+      <div className="flex flex-wrap items-center gap-3">
+        <Button
+          variant="secondary"
+          size="sm"
+          icon="check"
+          onClick={handleGuardar}
+          loading={status === "saving"}
+        >
+          {status === "saving" ? "Guardando…" : "Guardar cotización"}
+        </Button>
+        {status === "error" && error && (
+          <span role="alert" className="text-xs text-danger">
+            {error}
+          </span>
+        )}
+      </div>
+    </Can>
   );
 }

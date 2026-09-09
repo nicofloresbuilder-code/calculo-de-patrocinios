@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { computePrice } from "./pricing.ts";
+import { computePrice, territorioFactor } from "./pricing.ts";
 
 // Comparable real de docs/PACKET.md / BUILD_PROMPT.md: Match Cup · Frontón Bucareli.
 // Cifra negociada real: $300,000 MXN (placeholder hasta el pase mecánico de Commit 7).
@@ -102,4 +102,105 @@ test("Goleiro: el modelo lo valúa MUY por encima de lo que se cerró (deal subv
     desvio > 0.3,
     `objetivo=${result.objetivo}, desvío=${(desvio * 100).toFixed(1)}% — si esto baja, alguien recalibró contra un deal que Nicolás marcó como subvaluado`,
   );
+});
+
+// ─────────────────────────────────────────────────────────────────────
+// Territorio opcional (solo presencia, sin espacio físico)
+// ─────────────────────────────────────────────────────────────────────
+
+test("sin tiene_territorio explícito, el precio no cambia (compatibilidad)", () => {
+  // Este es el test que protege la calibración: agregar el campo no debe
+  // mover ni un peso de lo que ya estaba validado contra deals reales.
+  const evento = {
+    activacion: "oficial" as const,
+    aforo: 15000,
+    dias: 2,
+    lineup: "B" as const,
+    exclusiva: true,
+    ciudad_tier: "tier1" as const,
+    territorio_lado: 5,
+  };
+  assert.equal(
+    computePrice(evento).objetivo,
+    computePrice({ ...evento, tiene_territorio: true }).objetivo,
+  );
+});
+
+test("sin espacio físico el precio baja y no depende del lado", () => {
+  const base = {
+    activacion: "oficial" as const,
+    aforo: 15000,
+    dias: 2,
+    lineup: "B" as const,
+    exclusiva: true,
+    ciudad_tier: "tier1" as const,
+  };
+  const conEspacio = computePrice({ ...base, territorio_lado: 5 });
+  const soloPresencia = computePrice({ ...base, tiene_territorio: false, territorio_lado: 5 });
+
+  assert.ok(
+    soloPresencia.objetivo < conEspacio.objetivo,
+    "solo presencia debe costar menos que una activación de 5×5",
+  );
+
+  // El lado se ignora por completo cuando no hay espacio físico: si influyera,
+  // el usuario estaría pagando por metros que no existen.
+  for (const lado of [1, 5, 10, 30]) {
+    assert.equal(
+      computePrice({ ...base, tiene_territorio: false, territorio_lado: lado }).objetivo,
+      soloPresencia.objetivo,
+      `el lado ${lado} no debe afectar un deal de solo presencia`,
+    );
+  }
+});
+
+test("el preset de 3×3 interpola entre las anclas reales de 2 y 5", () => {
+  // Cambiar el botón de la UI de 2×2 a 3×3 no toca las anclas de calibración.
+  const f2 = territorioFactor(2);
+  const f3 = territorioFactor(3);
+  const f5 = territorioFactor(5);
+  assert.equal(f2, 0.34, "el ancla real de 2×2 sigue en su lugar");
+  assert.equal(f5, 1.0, "el ancla real de 5×5 sigue en su lugar");
+  assert.ok(f3 > f2 && f3 < f5, "3×3 debe caer entre las dos anclas");
+});
+
+test("ANCLA: solo presencia reproduce el precio real de Nicolás", () => {
+  // $1,000,000 para el evento del Grupo A sin espacio físico (2026-09-08).
+  // Mismo caso con el que se calibraron las 4 anclas de territorio.
+  const r = computePrice({
+    activacion: "oficial",
+    aforo: 15000,
+    dias: 2,
+    lineup: "B",
+    exclusiva: true,
+    ciudad_tier: "tier1",
+    tiene_territorio: false,
+  });
+  const desvio = Math.abs(r.objetivo / 1_000_000 - 1);
+  assert.ok(
+    desvio < 0.01,
+    `solo presencia debería dar ~$1,000,000, dio ${Math.round(r.objetivo)} (desvío ${(desvio * 100).toFixed(2)}%)`,
+  );
+});
+
+test("DOCUMENTA LA INCONSISTENCIA: solo presencia sale más caro que un stand chico", () => {
+  // Este test NO valida un comportamiento deseado: fija uno que está en
+  // revisión, para que si alguien cambia las anclas o el factor, se entere de
+  // que esto se movió. Ver la nota de SIN_TERRITORIO_FACTOR.
+  const base = {
+    activacion: "oficial" as const,
+    aforo: 15000,
+    dias: 2,
+    lineup: "B" as const,
+    exclusiva: true,
+    ciudad_tier: "tier1" as const,
+  };
+  const sinEspacio = computePrice({ ...base, tiene_territorio: false }).objetivo;
+  const dosPorDos = computePrice({ ...base, territorio_lado: 2 }).objetivo;
+  const tresPorTres = computePrice({ ...base, territorio_lado: 3 }).objetivo;
+  const cincoPorCinco = computePrice({ ...base, territorio_lado: 5 }).objetivo;
+
+  assert.ok(sinEspacio > dosPorDos, "hoy: sin espacio > 2×2 (pendiente de resolver)");
+  assert.ok(sinEspacio > tresPorTres, "hoy: sin espacio > 3×3 (pendiente de resolver)");
+  assert.ok(sinEspacio < cincoPorCinco, "sin espacio sí debe costar menos que un 5×5");
 });

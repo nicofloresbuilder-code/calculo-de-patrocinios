@@ -107,6 +107,51 @@ export const TERRITORIO_ANCLAS: { lado: number; factor: number }[] = [
   { lado: 15, factor: 2.69 },
 ];
 
+/**
+ * Factor cuando el patrocinio NO incluye espacio físico — la marca solo
+ * tiene presencia (logo, menciones, branding).
+ *
+ * CALIBRADO con un precio real de Nicolás (2026-09-08): $1,000,000 para el
+ * mismo evento del Grupo A con el que se calibraron las 4 anclas de
+ * territorio (15,000 pers · 2 días · line-up B · CDMX · oficial · con
+ * exclusividad).
+ *
+ * Derivado con la MISMA aritmética que las anclas — precio real dividido
+ * entre lo que da la fórmula con territorio neutro ($1,188,633):
+ *
+ *     1,000,000 / 1,188,633 = 0.8413  →  0.84   (desvío -0.15%)
+ *
+ * El método se validó reproduciendo las 4 anclas existentes:
+ *     2×2   400,000 / 1,188,633 = 0.34 ✓
+ *     5×5 1,200,000 / 1,188,633 = 1.00 ✓
+ *   10×10 2,000,000 / 1,188,633 = 1.68 ✓
+ *   15×15 3,200,000 / 1,188,633 = 2.69 ✓
+ *
+ * ⚠️ INCONSISTENCIA CONOCIDA, PENDIENTE DE RESOLVER CON NICOLÁS
+ *
+ * Este 0.84 queda POR ENCIMA de las anclas de 2×2 (0.34) y 3×3 (0.56). O sea
+ * que, con los datos actuales, poner un stand chico sale MÁS BARATO que no
+ * poner nada:
+ *
+ *     sin espacio  $998,452
+ *     2×2          $404,135
+ *     3×3          $665,634
+ *     5×5        $1,188,633
+ *
+ * Las dos lecturas posibles:
+ *
+ *  a) Son productos distintos, no puntos de la misma curva. "Solo presencia"
+ *     sería un paquete de visibilidad sobre TODO el evento, mientras que un
+ *     2×2 es una marca chica con presupuesto chico. Si es así, el modelo no
+ *     debería tratarlos como la misma variable.
+ *
+ *  b) Alguno de los dos números necesita revisarse.
+ *
+ * Mientras se resuelve, se usa el dato tal cual lo dio — no se ajusta ni se
+ * promedia nada por cuenta propia. Ver DECISIONS.md.
+ */
+export const SIN_TERRITORIO_FACTOR = 0.84;
+
 export const TERRITORIO_LADO_MIN = 1;
 export const TERRITORIO_LADO_MAX = 30;
 
@@ -143,6 +188,12 @@ export interface ComputePriceInput {
   ciudad_tier: CiudadTier;
   /** Lado en metros del espacio de activación (2 = 2x2). Default 5x5. */
   territorio_lado?: number;
+  /**
+   * Si el patrocinio incluye espacio físico. Default `true` a propósito: así
+   * todo el código y los tests que existían antes de este campo siguen
+   * calculando exactamente lo mismo.
+   */
+  tiene_territorio?: boolean;
 }
 
 export interface PriceFactors {
@@ -180,6 +231,7 @@ export function computePrice({
   exclusiva,
   ciudad_tier,
   territorio_lado = 5,
+  tiene_territorio = true,
 }: ComputePriceInput): ComputePriceResult {
   const base = BASE_ACTIVACION[activacion];
 
@@ -189,7 +241,9 @@ export function computePrice({
     lineup: LINEUP_FACTOR[lineup],
     exclusividad: exclusiva ? 1.25 : 1.0,
     ciudad: CIUDAD_FACTOR[ciudad_tier],
-    territorio: territorioFactor(territorio_lado),
+    territorio: tiene_territorio
+      ? territorioFactor(territorio_lado)
+      : SIN_TERRITORIO_FACTOR,
   };
 
   const totalFactor = Object.values(factors).reduce((a, b) => a * b, 1);

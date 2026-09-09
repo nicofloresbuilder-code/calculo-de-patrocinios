@@ -384,3 +384,263 @@ Se agregó `0003_corregir_comparables.sql` para arreglarlo en un proyecto existe
 - **Si hay que crear uno nuevo:** correr `setup-proyecto-nuevo.sql` (unión de las tres, con montos ya corregidos), y actualizar `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_ANON_KEY` y `SUPABASE_SERVICE_ROLE_KEY` en Vercel y en `.env.local`.
 
 **Decisión pendiente para Nicolás:** si Goleiro debe seguir sirviendo como comparable para la IA. Es un hecho histórico real, pero él mismo lo marcó como subvaluado — citarlo empuja las cotizaciones hacia abajo. El monto se corrigió; si debe salir de la tabla, es decisión suya.
+
+---
+
+## Sesión — 2026-09-08 — Supabase reactivado y migraciones aplicadas
+
+### CORRECCIÓN: el proyecto estaba PAUSADO, no borrado
+
+La sesión del 2026-08-30 concluyó que el NXDOMAIN del subdominio *"apunta más
+bien a borrado"*, razonando que un proyecto pausado conserva su subdominio.
+**Eso era incorrecto.**
+
+La señal que lo delató: el proyecto de Cotejo —que se usó activamente días
+antes y que en su momento sirvió como control porque *sí* resolvía— empezó a
+dar NXDOMAIN también. Dos proyectos inactivos, ambos fuera del DNS, ninguno
+borrado por nadie. Esa es la firma de la **pausa automática del free tier**,
+no de un borrado.
+
+El dashboard lo confirmó: *"Project 'aforo' is paused — All data, including
+backups and storage objects, remains safe."* Se reactivó con **Resume
+project** y el subdominio volvió a resolver, con la misma URL y las mismas
+llaves de antes.
+
+**Lección:** en el free tier de Supabase, NXDOMAIN del subdominio NO permite
+distinguir pausa de borrado. La única fuente de verdad es el dashboard.
+
+### Migraciones aplicadas
+
+Se creó `supabase/APLICAR-TODO-PENDIENTE.sql`, unión de 0002 a 0006 hecha
+idempotente (guardas en create type / table / policy / trigger, `on conflict
+do nothing` en los seeds), y probada antes contra un Postgres 16 local con
+stubs de `auth.users` y `auth.uid()`.
+
+**Tropiezo al aplicarla:** el primer intento falló con *"Failed to get
+project's logs"*. La consulta había quedado en el editor de **Logs**
+(ClickHouse), no en el **SQL Editor** (Postgres) — dos motores distintos en
+la misma pantalla. Se resolvió abriendo una pestaña nueva con el botón `+`.
+Vale documentarlo porque el error no dice nada sobre la causa.
+
+**Verificado contra la base real:**
+
+| Revisión | Resultado |
+|---|---|
+| Permisos en el catálogo | 18 ✅ |
+| Roles | 6 ✅ |
+| Asignaciones rol→permiso | 55 ✅ |
+| Columnas `marca` y `contacto` | 2 ✅ |
+| Tablas sin RLS | 0 ✅ |
+| Políticas con `qual = true` | 0 ✅ |
+| `comparables` exige `auth.uid()` | 1 política ✅ |
+| `INSERT` de `authenticated` en `cotizaciones` | 0 grants ✅ |
+
+Los cuatro primeros coinciden exactamente con los de la prueba local.
+
+### Los dos hallazgos CRITICAL quedaron cerrados
+
+1. `comparables` ya no es legible sin sesión iniciada.
+2. El navegador ya no puede escribir un precio arbitrario en `cotizaciones`.
+
+### Consecuencia inmediata: la service-role key dejó de ser opcional
+
+`0005` revoca el `INSERT` directo de `authenticated`. El endpoint
+`POST /api/cotizaciones` usa el cliente `service_role` cuando está
+configurado, y **cae al cliente de sesión cuando no lo está** — un camino que
+antes funcionaba y que a partir de ahora está revocado.
+
+Es decir: **sin `SUPABASE_SERVICE_ROLE_KEY` en Vercel, guardar cotizaciones
+falla.** No es una regresión, es la revocación haciendo su trabajo; pero el
+orden importaba y en la instrucción que se le dio a Nicolás se dijo que
+Vercel "podía esperar". No podía. Queda corregido aquí.
+
+---
+
+## Sesión — 2026-09-08 (2) — Calibración de "solo presencia"
+
+### El dato
+
+Nicolás dio el precio que faltaba: **$1,000,000** para el evento del Grupo A
+(15,000 pers · 2 días · line-up B · CDMX · oficial · con exclusividad) cuando
+la marca **solo tiene presencia**, sin espacio físico.
+
+Derivado con la misma aritmética que las 4 anclas de territorio — precio real
+entre lo que da la fórmula con territorio neutro ($1,188,633):
+
+    1,000,000 / 1,188,633 = 0.8413  →  SIN_TERRITORIO_FACTOR = 0.84
+
+El método se validó primero reproduciendo las anclas existentes: 2×2 → 0.34,
+5×5 → 1.00, 10×10 → 1.68, 15×15 → 2.69. Los cuatro salen exactos, así que la
+derivación es consistente con cómo se calibró todo lo demás.
+
+**El valor provisional que se había puesto (0.15) estaba 5.6× por debajo.**
+Se había elegido reutilizando el piso de la extrapolación para no inventar un
+número, y la UI lo marcaba como sin calibrar. Queda corregido con dato real.
+
+### 🔴 INCONSISTENCIA ABIERTA: solo presencia sale más caro que un stand chico
+
+Con los datos actuales, el mismo evento variando solo el espacio:
+
+| Espacio | Factor | Precio |
+|---|---|---|
+| **Sin espacio** | 0.84 | **$998,452** |
+| 2×2 | 0.34 | $404,135 |
+| 3×3 | 0.56 | $665,634 |
+| 5×5 | 1.00 | $1,188,633 |
+
+Es decir: **poner un stand de 2×2 hace el patrocinio 60% más barato que no
+poner nada.** El punto de equilibrio está alrededor de 4.3×4.3.
+
+Eso no puede ser cierto como curva continua. Dos lecturas posibles:
+
+**a) Son productos distintos, no puntos de la misma curva.** "Solo presencia"
+sería un paquete de visibilidad sobre todo el evento (logo en pantallas,
+menciones, branding), mientras que un 2×2 es una marca chica con presupuesto
+chico que quiere una esquina. Si es así, el modelo NO debería tratarlos como
+la misma variable: harían falta dos caminos de precio distintos, no un factor
+en la misma escala.
+
+**b) Alguno de los dos números necesita revisarse** — quizá el 2×2 de
+$400,000 no era una variación pura de territorio sobre el mismo paquete.
+
+**Mientras se resuelve se usa el dato tal cual lo dio.** No se promedió, no se
+ajustó, no se inventó un punto intermedio. Hay un test
+(`DOCUMENTA LA INCONSISTENCIA: ...`) que fija el comportamiento actual para
+que, si alguien mueve las anclas o el factor, se entere de que esto cambió.
+
+### Otras respuestas de Nicolás en la misma sesión
+
+- **Producto:** lo que hace falta no es un campo de costo. Es poder **entrar
+  el producto de tres formas**: como porcentaje del deal, como cantidad de
+  unidades, o como monto directo. Hoy solo existe la tercera.
+- **Tipo de producto:** cambia en cada deal según la industria de la marca
+  (tequila ≠ refresco), así que va como selección por cotización, no como
+  configuración global.
+- **Precio de venta en festival:** lo pone él. Se queda editable.
+- **Eventos:** un evento **se cotiza varias veces, a varias marcas**. Confirma
+  que `eventos` debe ser una entidad propia y que `cotizaciones` la referencia
+  — no un campo repetido dentro de cada cotización.
+
+---
+
+## 2026-09-09 · Catálogo de eventos
+
+Nicolás lo pidió así: *"yo como administrador subirte los eventos ya con toda
+la información que necesitas y entonces en el dashboard seleccionas el evento
+que quieres cotizar en vez de estar llenando cada vez los datos"*.
+
+### Qué es del evento y qué es del deal
+
+El corte no es obvio y define toda la tabla:
+
+| Del EVENTO (catálogo) | Del DEAL (cotización) |
+|---|---|
+| nombre, aforo, días, line-up, ciudad/tier | marca, contacto, exclusividad, tipo de activación, territorio, pago en producto |
+
+Un evento no cambia según a quién se le cotice; lo demás se negocia con cada
+marca. Por eso `eventos` no guarda `activacion` ni `exclusiva`, aunque hoy
+estén en la misma pantalla.
+
+### Editar un evento NO reescribe cotizaciones ya hechas
+
+**Decisión de Nicolás, sobre dos opciones que se le plantearon.** La
+cotización conserva su propia copia de aforo, días, line-up y tier;
+`evento_id` es solo la referencia.
+
+Por qué importa: si las cotizaciones leyeran el evento en vivo, corregir el
+aforo de 15,000 a 18,000 cambiaría el precio de algo que la marca ya tiene en
+su bandeja de entrada, sin que nadie lo hubiera tocado. Con la copia, lo
+enviado se puede explicar seis meses después con los datos con los que se
+calculó. El costo es que un dato mal capturado se queda mal en las
+cotizaciones viejas — que es exactamente lo que pasó de verdad y lo que hay
+que poder auditar.
+
+### Se conserva la captura a mano
+
+También decisión suya. El catálogo es el camino rápido, no una aduana: si
+llega una oportunidad de un evento que todavía no está cargado, se cotiza
+igual. `evento_id` vacío = capturado a mano.
+
+### El servidor no le cree al navegador qué evento es
+
+Al guardar, si viene `evento_id`, el servidor **relee los datos del catálogo**
+y descarta los que mandó el cliente antes de calcular el precio. Sin eso, la
+referencia sería decorativa: bastaría con mandar el id del festival chico y
+los números del grande.
+
+### RLS de `eventos`: lectura con sesión, escritura solo por endpoint
+
+La lectura exige sesión iniciada (`auth.uid() is not null`), no
+`tiene_permiso(auth.uid(), 'events.view')`. Motivo honesto: hoy el rol de la
+aplicación sale del bootstrap por correo (`AFORO_SUPER_ADMIN_EMAILS`), no de
+`usuario_roles`, así que una policy basada en esa tabla dejaría el catálogo
+vacío para usuarios que la aplicación sí considera autorizados. El filtro por
+permiso lo aplica el servidor. **Queda pendiente endurecerla** cuando
+`getAuthzContext()` lea de `perfiles` — está anotado en la migración.
+
+La escritura sí está revocada al rol `authenticated` (misma decisión que en
+`cotizaciones`, migración 0005): pasa solo por `/api/eventos`, que verifica
+`events.create` / `events.edit` / `events.delete` del lado del servidor.
+
+### Baja lógica, no borrado
+
+`activo = false`. Un evento borrado dejaría cotizaciones hablando de algo que
+ya no existe. Misma regla que con los usuarios.
+
+### Un hallazgo de la revisión visual
+
+Un `<span class="sr-only">` dentro del contenedor con scroll de la tabla hacía
+que **la página entera** se pudiera desplazar en horizontal a 390 px: al ser
+`position: absolute` sin ancestro posicionado, se escapa del recorte del
+contenedor y estira el ancho del documento. Se cambió por un encabezado
+visible. Vale tenerlo presente para cualquier tabla futura.
+
+---
+
+## 2026-09-09 · Los roles ya salen de la base de datos
+
+Hasta hoy `getAuthzContext()` resolvía el rol por correo:
+`AFORO_SUPER_ADMIN_EMAILS` → SUPER_ADMIN, cualquier otra sesión →
+COMMERCIAL. La tabla `usuario_roles` existía desde 0004 y **no servía para
+nada**: asignar un rol en Supabase no cambiaba lo que la aplicación permitía.
+Eso es peor que no tenerla, porque parece que sí.
+
+Ahora el contexto se arma leyendo `perfiles` (para el `status`) y
+`usuario_roles` (para los roles), con la sesión del propio usuario — RLS ya
+le deja leer lo suyo y nada más, así que no hace falta la llave de servicio.
+
+### Una persona puede tener varios roles
+
+**Decisión de Nicolás**, sobre dos opciones. Alguien puede ser Comercial y
+además Operaciones y poder hacer lo de los dos; los permisos se suman.
+
+La alternativa era un rol por persona, más simple de auditar. Se descartó
+porque `usuario_roles` ya era N:M: con un solo rol, la base permitiría algo
+que la aplicación ignoraría en silencio, que es justo el tipo de desfase que
+después nadie entiende.
+
+`ctx.role` sigue existiendo, pero **solo como etiqueta** — el de mayor
+alcance, para mostrarlo junto al nombre. Los accesos salen siempre de la
+unión de permisos.
+
+### El bootstrap por correo se queda
+
+`AFORO_SUPER_ADMIN_EMAILS` se comprueba **antes** de consultar la base. Ya no
+es un parche por falta de tablas: es la salida de emergencia. Si alguien se
+desactiva a sí mismo, o una migración deja `perfiles` sin administradores
+activos, ese correo es lo único que permite volver a entrar.
+
+### Lo que esto endurece, y a quién puede dejar fuera
+
+Deny by default, ahora de verdad: sin fila en `perfiles`, sin ningún rol
+asignado, o con `status` distinto de ACTIVE, el contexto es ANONYMOUS.
+
+El efecto colateral hay que decirlo: **una cuenta que antes entraba como
+COMMERCIAL por el solo hecho de estar autenticada, ahora no entra** hasta que
+tenga perfil, rol y status ACTIVE. Es lo correcto, pero significa que dar de
+alta a alguien requiere asignarle rol — hoy por SQL, hasta que exista el
+módulo de usuarios.
+
+También se descarta cualquier rol que exista en la base pero no en el
+catálogo del código (`rolesDeAsignaciones`). Crear un rol a mano en SQL no
+abre accesos que nadie revisó.
