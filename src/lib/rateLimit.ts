@@ -121,6 +121,8 @@ export const LIMITES = {
   narrativa: { limite: 10, ventanaMs: 60_000 },
   /** Escritura en base de datos. */
   guardarCotizacion: { limite: 20, ventanaMs: 60_000 },
+  /** Alta y edición del catálogo de eventos. */
+  catalogoEventos: { limite: 30, ventanaMs: 60_000 },
   /** Intercambio de código OAuth. Protege contra fuerza bruta sobre el callback. */
   authCallback: { limite: 15, ventanaMs: 60_000 },
 } as const;

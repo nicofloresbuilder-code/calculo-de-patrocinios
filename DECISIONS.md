@@ -520,3 +520,77 @@ que, si alguien mueve las anclas o el factor, se entere de que esto cambió.
 - **Eventos:** un evento **se cotiza varias veces, a varias marcas**. Confirma
   que `eventos` debe ser una entidad propia y que `cotizaciones` la referencia
   — no un campo repetido dentro de cada cotización.
+
+---
+
+## 2026-09-09 · Catálogo de eventos
+
+Nicolás lo pidió así: *"yo como administrador subirte los eventos ya con toda
+la información que necesitas y entonces en el dashboard seleccionas el evento
+que quieres cotizar en vez de estar llenando cada vez los datos"*.
+
+### Qué es del evento y qué es del deal
+
+El corte no es obvio y define toda la tabla:
+
+| Del EVENTO (catálogo) | Del DEAL (cotización) |
+|---|---|
+| nombre, aforo, días, line-up, ciudad/tier | marca, contacto, exclusividad, tipo de activación, territorio, pago en producto |
+
+Un evento no cambia según a quién se le cotice; lo demás se negocia con cada
+marca. Por eso `eventos` no guarda `activacion` ni `exclusiva`, aunque hoy
+estén en la misma pantalla.
+
+### Editar un evento NO reescribe cotizaciones ya hechas
+
+**Decisión de Nicolás, sobre dos opciones que se le plantearon.** La
+cotización conserva su propia copia de aforo, días, line-up y tier;
+`evento_id` es solo la referencia.
+
+Por qué importa: si las cotizaciones leyeran el evento en vivo, corregir el
+aforo de 15,000 a 18,000 cambiaría el precio de algo que la marca ya tiene en
+su bandeja de entrada, sin que nadie lo hubiera tocado. Con la copia, lo
+enviado se puede explicar seis meses después con los datos con los que se
+calculó. El costo es que un dato mal capturado se queda mal en las
+cotizaciones viejas — que es exactamente lo que pasó de verdad y lo que hay
+que poder auditar.
+
+### Se conserva la captura a mano
+
+También decisión suya. El catálogo es el camino rápido, no una aduana: si
+llega una oportunidad de un evento que todavía no está cargado, se cotiza
+igual. `evento_id` vacío = capturado a mano.
+
+### El servidor no le cree al navegador qué evento es
+
+Al guardar, si viene `evento_id`, el servidor **relee los datos del catálogo**
+y descarta los que mandó el cliente antes de calcular el precio. Sin eso, la
+referencia sería decorativa: bastaría con mandar el id del festival chico y
+los números del grande.
+
+### RLS de `eventos`: lectura con sesión, escritura solo por endpoint
+
+La lectura exige sesión iniciada (`auth.uid() is not null`), no
+`tiene_permiso(auth.uid(), 'events.view')`. Motivo honesto: hoy el rol de la
+aplicación sale del bootstrap por correo (`AFORO_SUPER_ADMIN_EMAILS`), no de
+`usuario_roles`, así que una policy basada en esa tabla dejaría el catálogo
+vacío para usuarios que la aplicación sí considera autorizados. El filtro por
+permiso lo aplica el servidor. **Queda pendiente endurecerla** cuando
+`getAuthzContext()` lea de `perfiles` — está anotado en la migración.
+
+La escritura sí está revocada al rol `authenticated` (misma decisión que en
+`cotizaciones`, migración 0005): pasa solo por `/api/eventos`, que verifica
+`events.create` / `events.edit` / `events.delete` del lado del servidor.
+
+### Baja lógica, no borrado
+
+`activo = false`. Un evento borrado dejaría cotizaciones hablando de algo que
+ya no existe. Misma regla que con los usuarios.
+
+### Un hallazgo de la revisión visual
+
+Un `<span class="sr-only">` dentro del contenedor con scroll de la tabla hacía
+que **la página entera** se pudiera desplazar en horizontal a 390 px: al ser
+`position: absolute` sin ancestro posicionado, se escapa del recorte del
+contenedor y estira el ancho del documento. Se cambió por un encabezado
+visible. Vale tenerlo presente para cualquier tabla futura.

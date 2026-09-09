@@ -34,6 +34,12 @@ export const PERMISSIONS = [
   "users.delete",
   "users.assign_role",
 
+  // Catálogo de eventos (el administrador los carga, el comercial los elige)
+  "events.view",
+  "events.create",
+  "events.edit",
+  "events.delete",
+
   // Catálogo de comparables (la base con la que se calibra el precio)
   "comparables.view",
   "comparables.create",
@@ -101,6 +107,10 @@ export const ROLE_PERMISSIONS: Record<RoleName, readonly Permission[]> = {
     "users.edit",
     "users.delete",
     "users.assign_role",
+    "events.view",
+    "events.create",
+    "events.edit",
+    "events.delete",
     "comparables.view",
     "comparables.create",
     "comparables.edit",
@@ -115,19 +125,29 @@ export const ROLE_PERMISSIONS: Record<RoleName, readonly Permission[]> = {
     "quotes.edit",
     "quotes.view_all",
     "users.view",
+    "events.view",
+    "events.create",
+    "events.edit",
     "comparables.view",
     "reports.view",
     "reports.export",
   ],
-  COMMERCIAL: ["quotes.view", "quotes.create", "quotes.edit", "comparables.view"],
+  COMMERCIAL: [
+    "quotes.view",
+    "quotes.create",
+    "quotes.edit",
+    "events.view",
+    "comparables.view",
+  ],
   OPERATIONS: [
     "quotes.view",
+    "events.view",
     "comparables.view",
     "comparables.create",
     "comparables.edit",
     "comparables.delete",
   ],
-  VIEWER: ["quotes.view", "comparables.view", "reports.view"],
+  VIEWER: ["quotes.view", "events.view", "comparables.view", "reports.view"],
 };
 
 /** Estados posibles de una cuenta. */

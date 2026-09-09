@@ -112,9 +112,21 @@ Ver `SECURITY-AUDIT.md`, controles #8 y #14, para por qué.
 `console.error` para el detalle técnico, mensaje de producto para la persona.
 Nunca devuelvas el error crudo de Supabase o de Postgres a la interfaz.
 
-## Estado actual
+## Estado actual — importante antes de tocar autorización
 
-`getAuthzContext()` todavía no lee de la base de datos: la migración
-`0004_rbac.sql` está escrita pero **no aplicada**. Cuando se aplique, el único
-código que cambia es el cuerpo de esa función. Ninguna llamada a
-`can()` / `requirePermission()` / `<Can>` cambia.
+`0004_rbac.sql` **ya está aplicada** (perfiles, roles, permisos y
+`tiene_permiso()` existen en la base). Pero `getAuthzContext()` **todavía no
+lee de ahí**: el rol sale del bootstrap por correo
+(`AFORO_SUPER_ADMIN_EMAILS` → SUPER_ADMIN; cualquier otra sesión →
+COMMERCIAL).
+
+Consecuencias prácticas mientras eso siga así:
+
+1. Asignar un rol en la base **no cambia** lo que la aplicación permite.
+2. Una policy de RLS escrita con `tiene_permiso(auth.uid(), …)` puede negar a
+   un usuario que la aplicación sí considera autorizado. Por eso `eventos`
+   (0008) exige solo sesión iniciada para leer, y el filtro por permiso lo
+   aplica el servidor.
+
+Cerrar esa brecha es un cambio contenido: el cuerpo de `getAuthzContext()`.
+Ninguna llamada a `can()` / `requirePermission()` / `<Can>` cambia.

@@ -4,6 +4,7 @@ import { adminClientDisponible, createAdminClient } from "@/lib/supabase/admin";
 import { AuthorizationError, requirePermission } from "@/lib/auth/session";
 import { parseEventoInput } from "@/lib/validation/parseEvento";
 import { computePrice } from "@/lib/pricing";
+import { obtenerEventoActivo } from "@/lib/eventos";
 import {
   LIMITES,
   checkRateLimit,
@@ -100,6 +101,32 @@ export async function POST(request: Request) {
   }
   const evento = parsed.evento;
 
+  // ── Si la cotización salió del catálogo, mandan los datos del catálogo ─
+  //
+  // El navegador dice "esto es el evento X". Los NÚMEROS de X los pone el
+  // servidor, leyéndolos de la base: si el cuerpo trae el id del festival
+  // chico con aforo de 500,000, gana el catálogo. Sin esto, la referencia
+  // al evento sería decorativa y el precio seguiría dependiendo de lo que
+  // mandó el cliente.
+  //
+  // Lo que se guarda es una FOTO: estos valores quedan copiados en la
+  // cotización, así que corregir el catálogo mañana no reescribe el precio
+  // de algo que la marca ya tiene en su bandeja.
+  if (evento.evento_id) {
+    const delCatalogo = await obtenerEventoActivo(evento.evento_id);
+    if (!delCatalogo) {
+      return NextResponse.json(
+        { error: "El evento seleccionado ya no está disponible." },
+        { status: 422 },
+      );
+    }
+    evento.nombre_evento = delCatalogo.nombre;
+    evento.aforo = delCatalogo.aforo;
+    evento.dias = delCatalogo.dias;
+    evento.lineup = delCatalogo.lineup;
+    evento.ciudad_tier = delCatalogo.ciudad_tier;
+  }
+
   // ── El precio lo decide el servidor, siempre ──────────────────────────
   const precio = computePrice(evento);
 
@@ -135,6 +162,9 @@ export async function POST(request: Request) {
     .from("cotizaciones")
     .insert({
       user_id: ctx.userId,
+      // Referencia al catálogo, si vino de ahí. Los datos del evento se
+      // guardan igual en esta misma fila: la referencia no los sustituye.
+      evento_id: evento.evento_id || null,
       // Datos comerciales. No entran en computePrice() — el precio no cambia
       // por escribirlos; sirven para saber a quién se le mandó y buscarlo.
       marca: evento.marca,

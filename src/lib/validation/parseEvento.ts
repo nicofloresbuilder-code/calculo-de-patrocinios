@@ -24,6 +24,7 @@ import { validateEvento, type EventoErrors } from "../validateEvento.ts";
 
 /** Allowlist explícita: solo estas llaves cruzan del cliente al servidor. */
 const CAMPOS_PERMITIDOS = [
+  "evento_id",
   "marca",
   "contacto",
   "nombre_evento",
@@ -42,6 +43,8 @@ const CAMPOS_PERMITIDOS = [
 const LINEUP_VALUES = LINEUP_OPTIONS.map((o) => o.value);
 const ACTIVACION_VALUES = ACTIVACION_OPTIONS.map((o) => o.value);
 const CIUDAD_VALUES = CIUDAD_TIER_OPTIONS.map((o) => o.value);
+
+const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 function esObjetoPlano(v: unknown): v is Record<string, unknown> {
   return typeof v === "object" && v !== null && !Array.isArray(v);
@@ -89,7 +92,16 @@ export function parseEventoInput(raw: unknown): ParseResult {
   if (!ciudad_tier) errores.ciudad_tier = "Selecciona una ciudad/tier válida.";
   if (Object.keys(errores).length > 0) return { ok: false, errores };
 
+  // Referencia al catálogo. Lo único que se comprueba aquí es la FORMA: que
+  // el evento exista, esté activo y sus datos sean los buenos lo resuelve el
+  // endpoint contra la base — el cliente no es fuente de verdad de eso.
+  const eventoId =
+    typeof raw.evento_id === "string" && UUID.test(raw.evento_id.trim())
+      ? raw.evento_id.trim()
+      : "";
+
   const candidato: EventoInput = {
+    evento_id: eventoId,
     marca: typeof raw.marca === "string" ? raw.marca.trim() : "",
     contacto: typeof raw.contacto === "string" ? raw.contacto.trim() : "",
     nombre_evento:

@@ -116,6 +116,8 @@ sin error antes del siguiente.**
 | 2 | `supabase/migrations/0004_rbac.sql` | Perfiles, roles, permisos, trigger de alta |
 | 3 | `supabase/migrations/0005_endurecimiento_rls.sql` | 🔴 **Cierra los dos hallazgos CRITICAL** |
 | 4 | `supabase/migrations/0006_marca_contacto.sql` | Campos de marca y contacto + índices de búsqueda |
+| 5 | `supabase/migrations/0007_territorio_opcional.sql` | Territorio opcional (solo presencia) |
+| 6 | `supabase/migrations/0008_eventos.sql` | Catálogo de eventos + permisos `events.*` |
 
 ### Si reactivaste el proyecto viejo (escenario A)
 
@@ -126,6 +128,8 @@ sin error antes del siguiente.**
 | 3 | `supabase/migrations/0004_rbac.sql` | Perfiles, roles, permisos |
 | 4 | `supabase/migrations/0005_endurecimiento_rls.sql` | 🔴 **Cierra los dos hallazgos CRITICAL** |
 | 5 | `supabase/migrations/0006_marca_contacto.sql` | Marca y contacto |
+| 6 | `supabase/migrations/0007_territorio_opcional.sql` | Territorio opcional (solo presencia) |
+| 7 | `supabase/migrations/0008_eventos.sql` | Catálogo de eventos + permisos `events.*` |
 
 ---
 

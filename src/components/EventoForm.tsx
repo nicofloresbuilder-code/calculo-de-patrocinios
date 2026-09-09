@@ -12,6 +12,7 @@ import {
   TERRITORIO_MAX,
   TERRITORIO_MIN,
   TERRITORIO_PRESETS,
+  type EventoCatalogo,
   type EventoInput,
 } from "@/lib/types";
 import { validateEvento, type EventoErrors } from "@/lib/validateEvento";
@@ -26,6 +27,7 @@ import {
 } from "@/components/ui";
 
 const initialForm: EventoInput = {
+  evento_id: "",
   marca: "",
   contacto: "",
   nombre_evento: "",
@@ -46,21 +48,59 @@ const TERRITORIO_OPTIONS = TERRITORIO_PRESETS.map((lado) => ({
   label: `${lado}×${lado}`,
 }));
 
+const numberFmt = new Intl.NumberFormat("es-MX");
+
+const LINEUP_LABEL = new Map(LINEUP_OPTIONS.map((o) => [o.value, o.label]));
+// Solo la etiqueta corta ("Tier 1"): la lista de ciudades de ejemplo sirve
+// para elegir en el select, no para describir un evento ya elegido.
+const TIER_CORTO = new Map(
+  CIUDAD_TIER_OPTIONS.map((o) => [o.value, o.label.split("·")[0].trim()]),
+);
+
 export function EventoForm({
   onSubmit,
+  eventos = [],
 }: {
   onSubmit?: (evento: EventoInput) => void;
+  /** Catálogo de eventos vigentes. Vacío = solo captura a mano. */
+  eventos?: readonly EventoCatalogo[];
 }) {
   const [form, setForm] = useState<EventoInput>(initialForm);
   const [errors, setErrors] = useState<EventoErrors>({});
   const [touched, setTouched] = useState(false);
 
-  function handleChange<K extends keyof EventoInput>(key: K, value: EventoInput[K]) {
-    const next = { ...form, [key]: value };
+  function actualizar(next: EventoInput) {
     setForm(next);
     // Solo se revalida en vivo después del primer intento: no se le grita al
     // usuario mientras todavía está escribiendo el primer campo.
     if (touched) setErrors(validateEvento(next));
+  }
+
+  function handleChange<K extends keyof EventoInput>(key: K, value: EventoInput[K]) {
+    actualizar({ ...form, [key]: value });
+  }
+
+  /**
+   * Elegir un evento del catálogo llena sus datos de golpe. Se copian al
+   * formulario (en vez de solo guardar el id) para que el precio se pueda
+   * calcular sin ir al servidor; al guardar, el servidor vuelve a leerlos
+   * del catálogo y esa es la versión que manda.
+   */
+  function seleccionarEvento(id: string) {
+    const evento = eventos.find((e) => e.id === id);
+    if (!evento) {
+      actualizar({ ...form, evento_id: "" });
+      return;
+    }
+    actualizar({
+      ...form,
+      evento_id: evento.id,
+      nombre_evento: evento.nombre,
+      aforo: evento.aforo,
+      dias: evento.dias,
+      lineup: evento.lineup,
+      ciudad_tier: evento.ciudad_tier,
+    });
   }
 
   function handleSubmit(e: FormEvent) {
@@ -73,6 +113,7 @@ export function EventoForm({
   }
 
   const errorCount = touched ? Object.keys(errors).length : 0;
+  const seleccionado = eventos.find((e) => e.id === form.evento_id) ?? null;
 
   return (
     <form onSubmit={handleSubmit} noValidate className="space-y-4">
@@ -108,64 +149,152 @@ export function EventoForm({
         )}
       </Field>
 
-      <Field label="Nombre del evento" error={errors.nombre_evento}>
-        {(p) => (
-          <Input
-            {...p}
-            type="text"
-            value={form.nombre_evento}
-            maxLength={120}
-            placeholder="Ej. Ultra México 2026"
-            onChange={(e) => handleChange("nombre_evento", e.target.value)}
-          />
-        )}
-      </Field>
-
-      <div className="grid grid-cols-2 gap-3">
-        <Field label="Aforo" error={errors.aforo}>
+      {eventos.length > 0 && (
+        <Field
+          label="Evento"
+          hint={
+            seleccionado
+              ? undefined
+              : "Elige uno del catálogo o captura los datos a mano abajo."
+          }
+        >
           {(p) => (
-            <Input
+            <Select
               {...p}
-              type="number"
-              inputMode="numeric"
-              value={form.aforo || ""}
-              min={1}
-              max={AFORO_MAX}
-              step={1}
-              placeholder="45000"
-              onChange={(e) => handleChange("aforo", Math.trunc(Number(e.target.value)))}
+              options={eventos.map((e) => ({ value: e.id, label: e.nombre }))}
+              placeholder="Capturar a mano"
+              value={form.evento_id ?? ""}
+              onChange={(e) => seleccionarEvento(e.target.value)}
             />
           )}
         </Field>
+      )}
 
-        <Field label="Duración (días)" error={errors.dias}>
-          {(p) => (
-            <Input
-              {...p}
-              type="number"
-              inputMode="numeric"
-              value={form.dias || ""}
-              min={1}
-              max={DIAS_MAX}
-              step={1}
-              onChange={(e) => handleChange("dias", Math.trunc(Number(e.target.value)))}
-            />
-          )}
-        </Field>
-      </div>
+      {seleccionado ? (
+        // Los datos del evento vienen del catálogo: se muestran, no se
+        // reescriben. Editarlos aquí crearía dos versiones del mismo evento.
+        <div className="rounded-md border border-line-subtle bg-sunken p-3">
+          <dl className="grid grid-cols-2 gap-x-3 gap-y-2 text-xs">
+            <div className="col-span-2">
+              <dt className="text-fg-subtle">Evento</dt>
+              <dd className="font-medium text-fg">{seleccionado.nombre}</dd>
+            </div>
+            <div>
+              <dt className="text-fg-subtle">Aforo</dt>
+              <dd className="text-fg">{numberFmt.format(seleccionado.aforo)}</dd>
+            </div>
+            <div>
+              <dt className="text-fg-subtle">Duración</dt>
+              <dd className="text-fg">
+                {seleccionado.dias} {seleccionado.dias === 1 ? "día" : "días"}
+              </dd>
+            </div>
+            <div className="col-span-2">
+              <dt className="text-fg-subtle">Line-up</dt>
+              <dd className="text-fg">
+                {LINEUP_LABEL.get(seleccionado.lineup) ?? seleccionado.lineup}
+              </dd>
+            </div>
+            <div className="col-span-2">
+              <dt className="text-fg-subtle">Ciudad</dt>
+              <dd className="text-fg">
+                {seleccionado.ciudad
+                  ? `${seleccionado.ciudad} · ${TIER_CORTO.get(seleccionado.ciudad_tier) ?? ""}`
+                  : (TIER_CORTO.get(seleccionado.ciudad_tier) ?? seleccionado.ciudad_tier)}
+              </dd>
+            </div>
+          </dl>
+          <Button
+            variant="ghost"
+            size="sm"
+            className="mt-2"
+            onClick={() => handleChange("evento_id", "")}
+          >
+            Capturar a mano
+          </Button>
+        </div>
+      ) : (
+        <>
+          <Field label="Nombre del evento" error={errors.nombre_evento}>
+            {(p) => (
+              <Input
+                {...p}
+                type="text"
+                value={form.nombre_evento}
+                maxLength={120}
+                placeholder="Ej. Ultra México 2026"
+                onChange={(e) => handleChange("nombre_evento", e.target.value)}
+              />
+            )}
+          </Field>
 
-      <Field label="Calibre del line-up" error={errors.lineup}>
-        {(p) => (
-          <Select
-            {...p}
-            options={LINEUP_OPTIONS}
-            value={form.lineup}
-            onChange={(e) =>
-              handleChange("lineup", e.target.value as EventoInput["lineup"])
-            }
-          />
-        )}
-      </Field>
+          <div className="grid grid-cols-2 gap-3">
+            <Field label="Aforo" error={errors.aforo}>
+              {(p) => (
+                <Input
+                  {...p}
+                  type="number"
+                  inputMode="numeric"
+                  value={form.aforo || ""}
+                  min={1}
+                  max={AFORO_MAX}
+                  step={1}
+                  placeholder="45000"
+                  onChange={(e) =>
+                    handleChange("aforo", Math.trunc(Number(e.target.value)))
+                  }
+                />
+              )}
+            </Field>
+
+            <Field label="Duración (días)" error={errors.dias}>
+              {(p) => (
+                <Input
+                  {...p}
+                  type="number"
+                  inputMode="numeric"
+                  value={form.dias || ""}
+                  min={1}
+                  max={DIAS_MAX}
+                  step={1}
+                  onChange={(e) =>
+                    handleChange("dias", Math.trunc(Number(e.target.value)))
+                  }
+                />
+              )}
+            </Field>
+          </div>
+
+          <Field label="Calibre del line-up" error={errors.lineup}>
+            {(p) => (
+              <Select
+                {...p}
+                options={LINEUP_OPTIONS}
+                value={form.lineup}
+                onChange={(e) =>
+                  handleChange("lineup", e.target.value as EventoInput["lineup"])
+                }
+              />
+            )}
+          </Field>
+
+          <Field label="Ciudad / venue" error={errors.ciudad_tier}>
+            {(p) => (
+              <Select
+                {...p}
+                options={CIUDAD_TIER_OPTIONS}
+                value={form.ciudad_tier}
+                onChange={(e) =>
+                  handleChange(
+                    "ciudad_tier",
+                    e.target.value as EventoInput["ciudad_tier"],
+                  )
+                }
+              />
+            )}
+          </Field>
+        </>
+      )}
 
       <Field label="Tipo de activación" error={errors.activacion}>
         {(p) => (
@@ -175,19 +304,6 @@ export function EventoForm({
             value={form.activacion}
             onChange={(e) =>
               handleChange("activacion", e.target.value as EventoInput["activacion"])
-            }
-          />
-        )}
-      </Field>
-
-      <Field label="Ciudad / venue" error={errors.ciudad_tier}>
-        {(p) => (
-          <Select
-            {...p}
-            options={CIUDAD_TIER_OPTIONS}
-            value={form.ciudad_tier}
-            onChange={(e) =>
-              handleChange("ciudad_tier", e.target.value as EventoInput["ciudad_tier"])
             }
           />
         )}

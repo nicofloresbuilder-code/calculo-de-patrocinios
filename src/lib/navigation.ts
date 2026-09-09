@@ -50,6 +50,14 @@ export const NAVIGATION: readonly NavSection[] = [
     title: "Administración",
     items: [
       {
+        href: "/admin/eventos",
+        label: "Eventos",
+        icon: "calendar",
+        // Aparece para quien mantiene el catálogo. Quien solo lo consume
+        // (COMMERCIAL) lo usa desde el cotizador, no necesita el módulo.
+        permissions: ["events.create", "events.edit", "events.delete"],
+      },
+      {
         href: "/admin/usuarios",
         label: "Usuarios",
         icon: "users",

@@ -9,9 +9,14 @@ import { RacionalPanel, type RacionalState } from "./RacionalPanel";
 import { GuardarCotizacion } from "./GuardarCotizacion";
 import { ProductoPanel } from "./ProductoPanel";
 import { computePrice, type ComputePriceResult } from "@/lib/pricing";
-import type { EventoInput } from "@/lib/types";
+import type { EventoCatalogo, EventoInput } from "@/lib/types";
 
-export function Cotizador() {
+export function Cotizador({
+  eventos = [],
+}: {
+  /** Catálogo de eventos vigentes, resuelto en el servidor. */
+  eventos?: readonly EventoCatalogo[];
+}) {
   const [evento, setEvento] = useState<EventoInput | null>(null);
   const [resultado, setResultado] = useState<ComputePriceResult | null>(null);
   const [racional, setRacional] = useState<RacionalState>({ status: "idle" });
@@ -76,7 +81,7 @@ export function Cotizador() {
     <div className="grid grid-cols-1 items-start gap-4 md:grid-cols-[300px_minmax(0,1fr)] lg:grid-cols-[320px_minmax(0,1fr)]">
       {/* Entradas — se quedan a la vista mientras se leen los resultados */}
       <Card title="Variables del evento" className="md:sticky md:top-[4.5rem]">
-        <EventoForm onSubmit={handleSubmit} />
+        <EventoForm onSubmit={handleSubmit} eventos={eventos} />
       </Card>
 
       {/* Resultados. `scroll-mt` deja aire para la barra superior fija. */}

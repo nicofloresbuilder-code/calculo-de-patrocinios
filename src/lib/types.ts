@@ -13,6 +13,13 @@ export interface EventoInput {
   marca: string;
   /** Persona de contacto en la marca. Opcional: no siempre se conoce todavía. */
   contacto: string;
+  /**
+   * Evento del catálogo del que salió esta cotización, si vino de ahí.
+   * Vacío = capturado a mano. NO es variable de precio: el servidor lo usa
+   * para tomar los datos del catálogo (y no los del navegador) antes de
+   * calcular, y para dejar la referencia guardada.
+   */
+  evento_id?: string;
   nombre_evento: string;
   aforo: number;
   dias: number;
@@ -69,3 +76,37 @@ export const CIUDAD_TIER_OPTIONS: { value: CiudadTier; label: string }[] = [
   { value: "tier2", label: "Tier 2 · capital de estado" },
   { value: "tier3", label: "Tier 3 · resto" },
 ];
+
+// ────────────────────────────────────────────────────────────────────────
+// CATÁLOGO DE EVENTOS
+//
+// Qué es del EVENTO y qué es del DEAL: el evento define aforo, días,
+// line-up y ciudad — no cambian según a quién se le cotice. La
+// exclusividad, el tipo de activación, el territorio y el pago en producto
+// se negocian con cada marca, así que viven en `EventoInput`, no aquí.
+// ────────────────────────────────────────────────────────────────────────
+
+/** Datos que el administrador captura al dar de alta un evento. */
+export interface EventoCatalogoInput {
+  nombre: string;
+  aforo: number;
+  dias: number;
+  lineup: Lineup;
+  /** Nombre de la ciudad. Informativo: lo que entra en la fórmula es el tier. */
+  ciudad: string;
+  ciudad_tier: CiudadTier;
+  /** ISO `YYYY-MM-DD`. Cadena vacía = sin fecha definida todavía. */
+  fecha_inicio: string;
+  notas: string;
+}
+
+/** Fila del catálogo tal como se lee de la base. */
+export interface EventoCatalogo extends EventoCatalogoInput {
+  id: string;
+  activo: boolean;
+  creado_en: string;
+}
+
+export const EVENTO_NOMBRE_MAX = 120;
+export const CIUDAD_MAX = 80;
+export const NOTAS_MAX = 500;

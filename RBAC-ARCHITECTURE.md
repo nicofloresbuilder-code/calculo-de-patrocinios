@@ -73,6 +73,7 @@ toca ni una línea de UI ni de endpoints.
 ```
 quotes.view · quotes.create · quotes.edit · quotes.delete · quotes.view_all
 users.view · users.create · users.edit · users.delete · users.assign_role
+events.view · events.create · events.edit · events.delete
 comparables.view · comparables.create · comparables.edit · comparables.delete
 reports.view · reports.export
 settings.view · settings.edit

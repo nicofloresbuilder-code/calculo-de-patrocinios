@@ -12,6 +12,7 @@ import type { SVGProps } from "react";
 export type IconName =
   | "calculator"
   | "documents"
+  | "calendar"
   | "users"
   | "settings"
   | "chevronDown"
@@ -35,6 +36,8 @@ const PATHS: Record<IconName, string> = {
     "M8 3h8a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2Zm0 5h8M9 12h.01M12 12h.01M15 12h.01M9 16h.01M12 16h.01M15 16h.01",
   documents:
     "M14 3H8a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h8a2 2 0 0 0 2-2V7l-4-4Zm0 0v4h4M9 13h6M9 17h4",
+  calendar:
+    "M8 3v4m8-4v4M4 9h16M6 5h12a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V7a2 2 0 0 1 2-2Zm2 9h.01M12 14h.01M16 14h.01M8 17h.01M12 17h.01",
   users:
     "M16 20v-1a4 4 0 0 0-4-4H7a4 4 0 0 0-4 4v1M9.5 11a3.5 3.5 0 1 0 0-7 3.5 3.5 0 0 0 0 7ZM21 20v-1a4 4 0 0 0-3-3.87M16.5 4.13a4 4 0 0 1 0 7.75",
   settings:

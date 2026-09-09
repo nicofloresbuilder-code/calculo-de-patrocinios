@@ -170,7 +170,14 @@ test("los campos protegidos que manda el cliente se descartan", () => {
   for (const campo of ["user_id", "created_by", "role", "isAdmin", "precio_objetivo", "desglose"]) {
     assert.ok(!(campo in r.evento), `"${campo}" no debe sobrevivir al parseo`);
   }
-  assert.deepEqual(Object.keys(r.evento).sort(), Object.keys(EVENTO_VALIDO).sort());
+  // `evento_id` sí es un campo legítimo del parser (la referencia al
+  // catálogo). Sale vacío cuando no viene, y su contenido se valida aparte:
+  // ver "evento_id solo se acepta si tiene forma de UUID" en eventos.test.ts.
+  assert.deepEqual(
+    Object.keys(r.evento).sort(),
+    [...Object.keys(EVENTO_VALIDO), "evento_id"].sort(),
+  );
+  assert.equal(r.evento.evento_id, "");
 });
 
 test("el precio lo decide el servidor: el que mande el cliente es irrelevante", () => {
